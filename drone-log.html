@@ -175,6 +175,7 @@ let state = {
     flightLogs: [], maintenanceLogs: [], drones: [], pilots: [],
     flightPurposes: ['空撮', '測量', '点検', '農薬散布', '配送', '訓練', '趣味'],
     maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
+    selectedLogDroneId: '',
     showMaintenanceForm: false, showDroneForm: false, showPilotForm: false,
     searchTerm: '', maintenanceChecked: true, loading: false, error: null,
 
@@ -719,7 +720,7 @@ async function saveFlightWithPostCheck() {
 
 // ─── 編集モーダル ─────────────────────────────────────────────────────────────
 function openEditModal(logId) {
-    const log = state.flightLogs.find(l => l.id === logId);
+    const log = state.flightLogs.find(l => String(l.id) === String(logId));
     if (!log) return;
     state.editingLog = { ...log };
     state.showEditModal = true;
@@ -1484,7 +1485,7 @@ function render() {
     if (state.loading) html += '<div class="loading">読み込み中...</div>';
 
     html += '<div class="tabs">';
-    ['flight:飛行日誌','maintenance:整備記録','manage:管理'].forEach(t => {
+    ['flight:飛行日誌','logs:飛行記録','maintenance:整備記録','manage:管理'].forEach(t => {
         const [key, label] = t.split(':');
         html += '<button onclick="state.activeTab=\'' + key + '\';window.scrollTo({top:0,behavior:\'instant\'});render();" class="tab ' + (state.activeTab===key?'tab-active':'tab-inactive') + '">' + label + '</button>';
     });
@@ -1493,6 +1494,7 @@ function render() {
 
     if (!state.loading) {
         if (state.activeTab === 'flight')           html += renderFlightTab();
+        else if (state.activeTab === 'logs')        html += renderLogsTab();
         else if (state.activeTab === 'maintenance') html += renderMaintenanceTab();
         else if (state.activeTab === 'manage')      html += renderManageTab();
     }
@@ -1520,7 +1522,6 @@ function render() {
 
 // ─── 飛行タブ ─────────────────────────────────────────────────────────────────
 function renderFlightTab() {
-    const logs = filterLogs(state.flightLogs);
     let html = '<div class="flight-control">';
 
     if (state.isRecording) {
@@ -1654,11 +1655,6 @@ function renderFlightTab() {
         html += '<button onclick="startFlight()" class="btn btn-start">▶ 飛行開始</button>';
     }
     html += '</div>';
-
-    // 過去の記録
-    html += '<h2 class="font-bold" style="font-size:1.25rem;margin-bottom:1rem;">過去の飛行記録（' + logs.length + '件）</h2>';
-    logs.forEach(log => { html += renderFlightLogCard(log); });
-    if (!logs.length) html += '<div class="empty-state">飛行記録がありません</div>';
 
     // PDF・データ出力
     html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-top:1.5rem;background:#f9fafb;">';
@@ -2047,6 +2043,73 @@ function renderMaintenanceEditModal() {
     html += '<button onclick="saveMaintenanceEdit()" class="btn btn-primary">保存</button>';
     html += '<button onclick="closeMaintenanceEditModal()" class="btn btn-secondary">キャンセル</button>';
     html += '</div></div></div>';
+    return html;
+}
+
+// ─── 飛行記録タブ ─────────────────────────────────────────────────────────────
+function renderLogsTab() {
+    let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">飛行記録</h2></div>';
+
+    // 機体セレクター
+    html += '<div class="form-group" style="max-width:400px;margin-bottom:1.5rem;">';
+    html += '<label class="label">機体を選択</label>';
+    html += '<select class="select" onchange="state.selectedLogDroneId=this.value;render();">';
+    html += '<option value="">選択してください</option>';
+    state.drones.forEach(d => {
+        const sid = String(d.id);
+        html += '<option value="' + sid + '"' + (state.selectedLogDroneId === sid ? ' selected' : '') + '>' + d.manufacturer + ' ' + d.model + '</option>';
+    });
+    html += '</select></div>';
+
+    if (!state.selectedLogDroneId) {
+        html += '<div class="empty-state">機体を選択してください</div>';
+        return html;
+    }
+
+    const logs = state.flightLogs.filter(l => String(l.droneId) === state.selectedLogDroneId);
+    if (!logs.length) {
+        html += '<div class="empty-state">この機体の飛行記録がありません</div>';
+        return html;
+    }
+
+    html += '<p class="text-sm text-gray" style="margin-bottom:1rem;">' + logs.length + '件</p>';
+    logs.forEach(log => { html += renderLogSummaryCard(log); });
+    return html;
+}
+
+function renderLogSummaryCard(log) {
+    const secs = log.totalFlightSecs || secsFromStartEnd(log.startTime, log.endTime);
+    const sessionCount = log.sessions ? log.sessions.length : 1;
+
+    let html = '<div class="card" style="margin-bottom:0.75rem;">';
+
+    // ヘッダー：日付＋時刻、実飛行時間、編集ボタン
+    html += '<div class="flex-between" style="margin-bottom:0.5rem;align-items:flex-start;">';
+    html += '<div>';
+    html += '<p class="font-bold" style="font-size:1rem;">' + log.date + '</p>';
+    if (log.startTime || log.endTime) {
+        html += '<p class="text-sm text-gray">' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
+    }
+    html += '</div>';
+    html += '<div class="flex gap-2" style="align-items:center;">';
+    html += '<span class="badge badge-blue">実飛行 ' + calcFlightTime(secs) + '</span>';
+    if (sessionCount > 1) html += '<span class="badge badge-orange">🔋×' + sessionCount + '</span>';
+    html += '<button onclick="openEditModal(\'' + log.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+    html += '<button onclick="deleteFlightLog(\'' + log.id + '\')" class="btn btn-danger btn-small">🗑</button>';
+    html += '</div></div>';
+
+    // 詳細：場所・飛行形態
+    html += '<div class="text-sm" style="display:flex;flex-direction:column;gap:0.25rem;">';
+    const place = log.takeoffAddress || log.location || '';
+    if (place) {
+        let locText = place;
+        if (log.landingAddress && log.landingAddress !== log.takeoffAddress) locText += ' → ' + log.landingAddress;
+        html += '<p><span class="font-medium">場所:</span> ' + locText + '</p>';
+    }
+    if (log.flightMode) html += '<p><span class="font-medium">飛行形態:</span> ' + log.flightMode + '</p>';
+    html += '</div>';
+
+    html += '</div>';
     return html;
 }
 
