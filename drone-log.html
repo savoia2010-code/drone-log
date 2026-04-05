@@ -365,7 +365,8 @@ async function nominatimAddress(lat, lon) {
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1&accept-language=ja');
     const data = await r.json();
     const a = data.address || {};
-    const parts = [a.prefecture, a.city || a.town || a.village, a.suburb, a.road].filter(Boolean);
+    const city = a.city || a.town || a.village || a.county || '';
+    const parts = [a.prefecture, city, a.suburb || a.neighbourhood || '', a.road || '', a.house_number || ''].filter(Boolean);
     return parts.join('') || data.display_name || '取得失敗';
 }
 
@@ -602,35 +603,36 @@ async function endFlight() {
 
 // ─── 飛行後点検：保存 ─────────────────────────────────────────────────────────
 async function saveFlightWithPostCheck() {
-    // フォームから収集
+    // フォームから収集（モーダルを閉じる前に読む）
     POSTFLIGHT_ITEMS.forEach(item => {
         const el = document.getElementById('po_' + item.id);
         if (el) state.postFlightChecks[item.id] = el.checked;
     });
-    const postflightNotesEl = document.getElementById('postflight-notes');
-    const postflightNotes = postflightNotesEl ? postflightNotesEl.value.trim() : '';
-    const flightReportEl = document.getElementById('flight-report');
-    const flightReport = flightReportEl ? flightReportEl.value.trim() : '正常';
-    const location = document.getElementById('final-location').value.trim();
-    const notes    = document.getElementById('final-notes').value.trim();
+    const postflightNotes = document.getElementById('postflight-notes')?.value.trim() || '';
+    const flightReport    = document.getElementById('flight-report')?.value.trim() || '正常';
+    const notes           = document.getElementById('final-notes')?.value.trim() || '';
 
-    if (!location) { alert('飛行場所を入力してください'); return; }
-
-    const allSessions = state.sessions;
+    const allSessions = [...state.sessions];
     const totalSecs   = allSessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
+    const flight      = { ...state.currentFlight };
+    const postChecks  = { ...state.postFlightChecks };
+    const maintChecked = state.maintenanceChecked;
+
+    // 飛行場所は離陸住所 → 離陸座標の順でフォールバック
+    const location = flight.takeoffAddress || allSessions[0]?.takeoffCoords || '';
 
     const log = {
-        droneId:          state.currentFlight.droneId,
-        pilotId:          state.currentFlight.pilotId,
-        purpose:          state.currentFlight.purpose,
-        flightMode:       state.currentFlight.flightMode || '',
-        weather:          state.currentFlight.weather,
-        date:             state.currentFlight.date,
-        takeoffAddress:   state.currentFlight.takeoffAddress || '',
-        landingAddress:   state.currentFlight.landingAddress || '',
-        preflightChecks:  state.currentFlight.preflightChecks,
-        preflightNotes:   state.currentFlight.preflightNotes || '',
-        postflightChecks: state.postFlightChecks,
+        droneId:          flight.droneId,
+        pilotId:          flight.pilotId,
+        purpose:          flight.purpose,
+        flightMode:       flight.flightMode || '',
+        weather:          flight.weather,
+        date:             flight.date,
+        takeoffAddress:   flight.takeoffAddress || '',
+        landingAddress:   flight.landingAddress || '',
+        preflightChecks:  flight.preflightChecks,
+        preflightNotes:   flight.preflightNotes || '',
+        postflightChecks: postChecks,
         postflightNotes:  postflightNotes,
         flightReport:     flightReport,
         sessions:         allSessions,
@@ -643,11 +645,19 @@ async function saveFlightWithPostCheck() {
         notes
     };
 
-    state.loading = true; render();
+    // モーダルを即時クローズしてローディング表示
+    Object.assign(state, {
+        showPostFlightModal: false,
+        isRecording: false, waitingForResume: false,
+        currentFlight: null, sessions: [], currentSessionNum: 0,
+        currentSessionSecs: 0, postFlightChecks: {},
+        loading: true
+    });
+    render();
+
     try {
         await callGAS('addFlightLog', log);
-
-        if (state.maintenanceChecked) {
+        if (maintChecked) {
             await callGAS('addMaintenanceLog', {
                 droneId: log.droneId, date: log.date, type: '飛行後点検',
                 technician: getPilotName(log.pilotId),
@@ -655,18 +665,10 @@ async function saveFlightWithPostCheck() {
                 maintenanceLocation: log.landingLocation, notes: '飛行記録から自動作成'
             });
         }
-
         await loadData();
-        Object.assign(state, {
-            isRecording: false, waitingForResume: false, currentFlight: null,
-            sessions: [], currentSessionNum: 0, currentSessionSecs: 0,
-            showPostFlightModal: false, postFlightChecks: {}
-        });
-        alert('飛行記録を保存しました');
     } catch(e) {
-        alert('保存に失敗しました: ' + e.message); state.loading = false;
+        alert('保存に失敗しました: ' + e.message); state.loading = false; render();
     }
-    render();
 }
 
 // ─── 編集モーダル ─────────────────────────────────────────────────────────────
@@ -1326,11 +1328,9 @@ function renderPostFlightModal() {
     html += '<label class="label" style="font-size:0.85rem;color:#1e40af;">特記事項</label>';
     html += '<textarea id="postflight-notes" class="textarea" rows="2" placeholder="異常・気になる点があれば記入してください">異常無し</textarea>';
     html += '</div>';
-    html += '<div class="grid grid-2" style="margin-bottom:1rem;">';
-    html += '<div class="form-group"><label class="label">飛行場所 *</label>';
-    html += '<input type="text" id="final-location" class="input" value="' + (TEST_MODE ? DUMMY_FLIGHT_LOCATION : '') + '" placeholder="例: ○○公園" /></div>';
-    html += '<div class="form-group"><label class="label">備考</label>';
-    html += '<input type="text" id="final-notes" class="input" value="' + (TEST_MODE ? DUMMY_NOTES : '') + '" placeholder="特記事項など" /></div>';
+    html += '<div class="form-group" style="margin-bottom:1rem;">';
+    html += '<label class="label">備考</label>';
+    html += '<input type="text" id="final-notes" class="input" value="' + (TEST_MODE ? DUMMY_NOTES : '') + '" placeholder="特記事項など" />';
     html += '</div>';
     // レポート（飛行中の不具合）
     html += '<div style="border:2px solid #fde68a;border-radius:0.5rem;padding:1rem;background:#fffbeb;margin-bottom:1.25rem;">';
@@ -1551,7 +1551,9 @@ function renderMaintenanceEditModal() {
         html += '<option' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     });
     html += '</select></div>';
-    html += '<div class="form-group"><label class="label">作業者</label><input type="text" id="me-tech" class="input" value="' + (m.technician||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">作業者</label><select id="me-tech" class="select"><option value="">選択してください</option>';
+    state.pilots.forEach(p => { html += '<option value="' + p.name + '"' + (p.name === (m.technician||'') ? ' selected' : '') + '>' + p.name + '</option>'; });
+    html += '</select></div>';
     html += '<div class="form-group"><label class="label">整備場所</label><input type="text" id="me-location" class="input" value="' + (m.maintenanceLocation||'') + '" /></div>';
     html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="me-next" class="input" value="' + (m.nextDate||'') + '" /></div>';
     html += '</div>';
@@ -1578,8 +1580,9 @@ function renderMaintenanceTab() {
         html += '<div class="form-group"><label class="label">整備種別</label><select id="maint-type" class="select">';
         ['','定期点検','飛行後点検','修理','部品交換','清掃','その他'].forEach(t => { html += '<option>' + t + '</option>'; });
         html += '</select></div>';
-        const tech = TEST_MODE && state.pilots.length > 0 ? state.pilots[0].name : '';
-        html += '<div class="form-group"><label class="label">作業者</label><input type="text" id="maint-tech" class="input" value="' + tech + '" /></div>';
+        html += '<div class="form-group"><label class="label">作業者</label><select id="maint-tech" class="select"><option value="">選択してください</option>';
+        state.pilots.forEach(p => { html += '<option value="' + p.name + '"' + (TEST_MODE && state.pilots[0]?.name === p.name ? ' selected' : '') + '>' + p.name + '</option>'; });
+        html += '</select></div>';
         const loc = TEST_MODE ? dummyLocation() : '';
         html += '<div class="form-group"><label class="label">整備場所' + (TEST_MODE?' <span class="badge badge-orange">テスト値</span>':'') + '</label>';
         html += '<input type="text" id="maint-location" class="input" value="' + loc + '" placeholder="' + (TEST_MODE ? '' : '取得中...') + '" /></div>';
