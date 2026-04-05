@@ -77,7 +77,8 @@ function doPost(e) {
           maintenanceLogs: getMaintenanceLogs(),
           flightPurposes: getFlightPurposes(),
           maintenanceContents: getMaintenanceContents(),
-          technicians: getTechnicians()
+          technicians: getTechnicians(),
+          maintenanceLocations: getMaintenanceLocations()
         };
         break;
       case 'addFlightPurpose':
@@ -88,6 +89,9 @@ function doPost(e) {
         break;
       case 'addTechnician':
         result = addTechnician(params.data);
+        break;
+      case 'addMaintenanceLocation':
+        result = addMaintenanceLocation(params.data);
         break;
       case 'getWeather':
         result = getWeather(params.data);
@@ -505,6 +509,21 @@ function addTechnician(name) {
   let sheet = ss.getSheetByName('作業者');
   if (!sheet) { sheet = ss.insertSheet('作業者'); sheet.appendRow(['name']); }
   if (!getTechnicians().includes(name)) { sheet.appendRow([name]); }
+  return { success: true };
+}
+
+function getMaintenanceLocations() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('整備場所');
+  if (!sheet) return [];
+  return sheet.getDataRange().getValues().slice(1).map(r => r[0]).filter(v => v);
+}
+
+function addMaintenanceLocation(loc) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('整備場所');
+  if (!sheet) { sheet = ss.insertSheet('整備場所'); sheet.appendRow(['location']); }
+  if (!getMaintenanceLocations().includes(loc)) { sheet.appendRow([loc]); }
   return { success: true };
 }
 

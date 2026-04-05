@@ -176,6 +176,7 @@ let state = {
     flightPurposes: ['空撮', '測量', '点検', '農薬散布', '配送', '訓練', '趣味'],
     maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
     technicians: [],
+    maintenanceLocations: [],
     selectedLogDroneId: '',
     showMaintenanceForm: false, showDroneForm: false, showPilotForm: false,
     searchTerm: '', maintenanceChecked: true, loading: false, error: null,
@@ -243,6 +244,7 @@ function handleLocalStorage(action, data) {
     const flightPurposes = JSON.parse(localStorage.getItem('flightPurposes') || '["空撮","測量","点検","農薬散布","配送","訓練","趣味"]');
     const maintenanceContents = JSON.parse(localStorage.getItem('maintenanceContents') || '["定期点検実施（異常なし）","機体全体の目視点検","プロペラの点検・清掃","バッテリーの点検・充電確認","センサー類の動作確認","モーターの点検","フレームの点検・清掃","部品交換"]');
     const technicians = JSON.parse(localStorage.getItem('technicians') || '[]');
+    const maintenanceLocations = JSON.parse(localStorage.getItem('maintenanceLocations') || '[]');
 
     switch(action) {
         case 'getDrones': return drones;
@@ -280,7 +282,7 @@ function handleLocalStorage(action, data) {
             return { success: true, id: n.id };
         }
         case 'getAllData':
-            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes, maintenanceContents, technicians };
+            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes, maintenanceContents, technicians, maintenanceLocations };
         case 'addFlightPurpose':
             if (!flightPurposes.includes(data)) { flightPurposes.push(data); localStorage.setItem('flightPurposes', JSON.stringify(flightPurposes)); }
             return { success: true };
@@ -289,6 +291,9 @@ function handleLocalStorage(action, data) {
             return { success: true };
         case 'addTechnician':
             if (!technicians.includes(data)) { technicians.push(data); localStorage.setItem('technicians', JSON.stringify(technicians)); }
+            return { success: true };
+        case 'addMaintenanceLocation':
+            if (!maintenanceLocations.includes(data)) { maintenanceLocations.push(data); localStorage.setItem('maintenanceLocations', JSON.stringify(maintenanceLocations)); }
             return { success: true };
         case 'updatePilot': {
             const idx = pilots.findIndex(p => p.id === data.id);
@@ -344,6 +349,7 @@ async function loadData() {
         if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
         if (data.maintenanceContents) { state.maintenanceContents = data.maintenanceContents; }
         if (data.technicians) { state.technicians = data.technicians; }
+        if (data.maintenanceLocations) { state.maintenanceLocations = data.maintenanceLocations; }
 
     } catch(e) { state.error = 'データの読み込みに失敗しました: ' + e.message; }
     finally { state.loading = false; render(); }
@@ -357,6 +363,7 @@ function clearCache() {
         flightPurposes: ['空撮','測量','点検','農薬散布','配送','訓練','趣味'],
         maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
         technicians: [],
+        maintenanceLocations: [],
         isRecording: false, waitingForResume: false, currentFlight: null, sessions: [],
         currentSessionNum: 0, currentSessionSecs: 0,
         showPostFlightModal: false, showEditModal: false, editingLog: null,
@@ -1023,6 +1030,44 @@ function toggleAccordion(bodyId, arrowId) {
     const isOpen = body.style.display !== 'none';
     body.style.display = isOpen ? 'none' : 'block';
     if (arrow) arrow.textContent = isOpen ? '▼ 展開してチェック' : '▲ 閉じる';
+}
+
+// 整備場所セレクト＋テキスト入力＋追加ボタン
+function _locationFieldHtml(selectId, inputId, currentVal, addInputId, testVal) {
+    let h = '';
+    if (state.maintenanceLocations.length) {
+        h += '<select id="' + selectId + '" class="select" style="margin-bottom:0.5rem;" onchange="(function(){var s=document.getElementById(\'' + selectId + '\');var i=document.getElementById(\'' + inputId + '\');if(s&&i&&s.value){i.value=s.value;s.value=\'\';}})();">';
+        h += '<option value="">よく使う場所から選択...</option>';
+        state.maintenanceLocations.forEach(loc => {
+            h += '<option value="' + loc + '">' + loc + '</option>';
+        });
+        h += '</select>';
+    }
+    h += '<input type="text" id="' + inputId + '" class="input" value="' + (currentVal||testVal||'') + '" placeholder="住所を入力（GPS自動取得）" style="margin-bottom:0.5rem;" />';
+    h += '<div style="display:flex;gap:0.5rem;">';
+    h += '<input type="text" id="' + addInputId + '" class="input" placeholder="よく使う場所を追加..." style="flex:1;" />';
+    h += '<button type="button" onclick="addMaintenanceLocation(\'' + inputId + '\',\'' + addInputId + '\')" class="btn btn-secondary" style="white-space:nowrap;">＋ 追加</button>';
+    h += '</div>';
+    return h;
+}
+
+function addMaintenanceLocation(inputId, addInputId) {
+    const addInput = document.getElementById(addInputId);
+    const mainInput = document.getElementById(inputId);
+    const val = (addInput ? addInput.value.trim() : '') || (mainInput ? mainInput.value.trim() : '');
+    if (!val || state.maintenanceLocations.includes(val)) { if (addInput) addInput.value = ''; return; }
+    state.maintenanceLocations.push(val);
+    if (TEST_MODE) localStorage.setItem('maintenanceLocations', JSON.stringify(state.maintenanceLocations));
+    else callGAS('addMaintenanceLocation', val);
+    ['maint-loc-select','me-loc-select'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (sel) {
+            const opt = document.createElement('option');
+            opt.value = val; opt.textContent = val;
+            sel.appendChild(opt);
+        }
+    });
+    if (addInput) addInput.value = '';
 }
 
 // 作業者セレクトのHTML生成（操縦者＋追加済み、追加ボタン付き）
@@ -2259,7 +2304,7 @@ function renderMaintenanceEditModal() {
     });
     html += '</select></div>';
     html += '<div class="form-group"><label class="label">作業者</label>' + _techSelectHtml('me-tech', m.technician||'', 'new-tech-input-edit') + '</div>';
-    html += '<div class="form-group"><label class="label">整備場所</label><input type="text" id="me-location" class="input" value="' + (m.maintenanceLocation||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">整備場所</label>' + _locationFieldHtml('me-loc-select', 'me-location', m.maintenanceLocation||'', 'new-loc-input-edit', '') + '</div>';
     html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="me-next" class="input" value="' + (m.nextDate||'') + '" /></div>';
     html += '</div>';
     html += '<div class="form-group"><label class="label">整備内容</label>';
@@ -2384,7 +2429,7 @@ function renderMaintenanceTab() {
         html += '<div class="form-group"><label class="label">作業者</label>' + _techSelectHtml('maint-tech', TEST_MODE ? (state.pilots[0]?.name || '') : '', 'new-tech-input') + '</div>';
         const loc = TEST_MODE ? dummyLocation() : '';
         html += '<div class="form-group"><label class="label">整備場所' + (TEST_MODE?' <span class="badge badge-orange">テスト値</span>':'') + '</label>';
-        html += '<input type="text" id="maint-location" class="input" value="' + loc + '" placeholder="' + (TEST_MODE ? '' : '取得中...') + '" /></div>';
+        html += _locationFieldHtml('maint-loc-select', 'maint-location', '', loc, '') + '</div>';
         html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="maint-next" class="input" /></div>';
         html += '</div>';
         html += '<div class="form-group"><label class="label">整備内容</label>';
