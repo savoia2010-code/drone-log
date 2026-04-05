@@ -168,10 +168,13 @@ const POSTFLIGHT_ITEMS = [
 ];
 
 // ─── 状態管理 ─────────────────────────────────────────────────────────────────
+const TODAY = TODAY;
+
 let state = {
     activeTab: 'flight',
     flightLogs: [], maintenanceLogs: [], drones: [], pilots: [],
     flightPurposes: ['空撮', '測量', '点検', '農薬散布', '配送', '訓練', '趣味'],
+    maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
     showMaintenanceForm: false, showDroneForm: false, showPilotForm: false,
     searchTerm: '', maintenanceChecked: true, loading: false, error: null,
 
@@ -236,6 +239,7 @@ function handleLocalStorage(action, data) {
     const flightLogs = JSON.parse(localStorage.getItem('flightLogs') || '[]');
     const maintenanceLogs = JSON.parse(localStorage.getItem('maintenanceLogs') || '[]');
     const flightPurposes = JSON.parse(localStorage.getItem('flightPurposes') || '["空撮","測量","点検","農薬散布","配送","訓練","趣味"]');
+    const maintenanceContents = JSON.parse(localStorage.getItem('maintenanceContents') || '["定期点検実施（異常なし）","機体全体の目視点検","プロペラの点検・清掃","バッテリーの点検・充電確認","センサー類の動作確認","モーターの点検","フレームの点検・清掃","部品交換"]');
 
     switch(action) {
         case 'getDrones': return drones;
@@ -273,9 +277,12 @@ function handleLocalStorage(action, data) {
             return { success: true, id: n.id };
         }
         case 'getAllData':
-            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes };
+            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes, maintenanceContents };
         case 'addFlightPurpose':
             if (!flightPurposes.includes(data)) { flightPurposes.push(data); localStorage.setItem('flightPurposes', JSON.stringify(flightPurposes)); }
+            return { success: true };
+        case 'addMaintenanceContent':
+            if (!maintenanceContents.includes(data)) { maintenanceContents.push(data); localStorage.setItem('maintenanceContents', JSON.stringify(maintenanceContents)); }
             return { success: true };
         case 'updatePilot': {
             const idx = pilots.findIndex(p => p.id === data.id);
@@ -319,6 +326,7 @@ async function loadData() {
         }
 
         if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
+        if (data.maintenanceContents) { state.maintenanceContents = data.maintenanceContents; }
 
     } catch(e) { state.error = 'データの読み込みに失敗しました: ' + e.message; }
     finally { state.loading = false; render(); }
@@ -330,6 +338,7 @@ function clearCache() {
     localStorage.clear();
     Object.assign(state, { drones: [], pilots: [], flightLogs: [], maintenanceLogs: [],
         flightPurposes: ['空撮','測量','点検','農薬散布','配送','訓練','趣味'],
+        maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
         isRecording: false, waitingForResume: false, currentFlight: null, sessions: [],
         currentSessionNum: 0, currentSessionSecs: 0,
         showPostFlightModal: false, showEditModal: false, editingLog: null,
@@ -965,6 +974,37 @@ function toggleAccordion(bodyId, arrowId) {
     if (arrow) arrow.textContent = isOpen ? '▼ 展開してチェック' : '▲ 閉じる';
 }
 
+// 整備内容の選択肢からテキストエリアへ入力
+function selectMaintenanceContent(selectId, textareaId) {
+    const sel = document.getElementById(selectId);
+    const ta  = document.getElementById(textareaId);
+    if (!sel || !ta || !sel.value) return;
+    ta.value = (ta.value ? ta.value + '\n' : '') + sel.value;
+    sel.value = '';
+}
+
+// 整備内容の選択肢に新しい項目を追加
+function addMaintenanceContent(inputId) {
+    const input = document.getElementById(inputId);
+    const val = input ? input.value.trim() : '';
+    if (!val) return;
+    if (state.maintenanceContents.includes(val)) { input.value = ''; return; }
+    state.maintenanceContents.push(val);
+    if (TEST_MODE) localStorage.setItem('maintenanceContents', JSON.stringify(state.maintenanceContents));
+    else callGAS('addMaintenanceContent', val);
+    // DOMに追加（re-render不要）
+    ['maint-desc-select','me-desc-select'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (sel) {
+            const opt = document.createElement('option');
+            opt.value = val; opt.textContent = val;
+            sel.appendChild(opt);
+            sel.value = val;
+        }
+    });
+    input.value = '';
+}
+
 // ─── ユーティリティ ───────────────────────────────────────────────────────────
 function filterLogs(logs) {
     if (!state.searchTerm) return logs;
@@ -992,7 +1032,7 @@ function checkSummary(checks, items) {
 function exportData() {
     const blob = new Blob([JSON.stringify({ drones: state.drones, flightLogs: state.flightLogs, maintenanceLogs: state.maintenanceLogs, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = 'drone-logs-' + new Date().toISOString().split('T')[0] + '.json'; a.click();
+    a.download = 'drone-logs-' + TODAY + '.json'; a.click();
 }
 // ─── PDF共通ヘルパー ─────────────────────────────────────────────────────────
 function _pdfEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1960,7 +2000,7 @@ function renderMaintenanceEditModal() {
     html += '</select></div>';
     html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="me-date" class="input" value="' + (m.date||'') + '" /></div>';
     html += '<div class="form-group"><label class="label">整備種別</label><select id="me-type" class="select">';
-    ['定期点検','飛行後点検','修理','部品交換','清掃','その他'].forEach(t => {
+    ['定期点検','修理','部品交換','清掃','メーカー点検','その他'].forEach(t => {
         html += '<option' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     });
     html += '</select></div>';
@@ -1970,7 +2010,16 @@ function renderMaintenanceEditModal() {
     html += '<div class="form-group"><label class="label">整備場所</label><input type="text" id="me-location" class="input" value="' + (m.maintenanceLocation||'') + '" /></div>';
     html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="me-next" class="input" value="' + (m.nextDate||'') + '" /></div>';
     html += '</div>';
-    html += '<div class="form-group"><label class="label">整備内容</label><textarea id="me-desc" class="textarea" rows="3">' + (m.description||'') + '</textarea></div>';
+    html += '<div class="form-group"><label class="label">整備内容</label>';
+    html += '<select id="me-desc-select" class="select" style="margin-bottom:0.5rem;" onchange="selectMaintenanceContent(\'me-desc-select\',\'me-desc\')">';
+    html += '<option value="">選択して追記...</option>';
+    state.maintenanceContents.forEach(c => { html += '<option value="' + c + '">' + c + '</option>'; });
+    html += '</select>';
+    html += '<textarea id="me-desc" class="textarea" rows="3">' + (m.description||'') + '</textarea>';
+    html += '<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">';
+    html += '<input type="text" id="new-maint-content-edit" class="input" placeholder="新しい整備内容を追加..." style="flex:1;" />';
+    html += '<button type="button" onclick="addMaintenanceContent(\'new-maint-content-edit\')" class="btn btn-secondary" style="white-space:nowrap;">＋ 追加</button>';
+    html += '</div></div>';
     html += '<div class="form-group"><label class="label">備考</label><textarea id="me-notes" class="textarea" rows="2">' + (m.notes||'') + '</textarea></div>';
     html += '<div class="flex gap-2">';
     html += '<button onclick="saveMaintenanceEdit()" class="btn btn-primary">保存</button>';
@@ -1989,9 +2038,9 @@ function renderMaintenanceTab() {
         html += '<div class="form-group"><label class="label">機体</label><select id="maint-drone" class="select"><option value="">選択</option>';
         state.drones.forEach(d => { html += '<option value="' + d.id + '">' + d.manufacturer + ' ' + d.model + '</option>'; });
         html += '</select></div>';
-        html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="maint-date" class="input" value="' + new Date().toISOString().split('T')[0] + '" /></div>';
+        html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="maint-date" class="input" value="' + TODAY + '" /></div>';
         html += '<div class="form-group"><label class="label">整備種別</label><select id="maint-type" class="select">';
-        ['','定期点検','飛行後点検','修理','部品交換','清掃','その他'].forEach(t => { html += '<option>' + t + '</option>'; });
+        ['','定期点検','修理','部品交換','清掃','メーカー点検','その他'].forEach(t => { html += '<option>' + t + '</option>'; });
         html += '</select></div>';
         html += '<div class="form-group"><label class="label">作業者</label><select id="maint-tech" class="select"><option value="">選択してください</option>';
         state.pilots.forEach(p => { html += '<option value="' + p.name + '"' + (TEST_MODE && state.pilots[0]?.name === p.name ? ' selected' : '') + '>' + p.name + '</option>'; });
@@ -2001,7 +2050,16 @@ function renderMaintenanceTab() {
         html += '<input type="text" id="maint-location" class="input" value="' + loc + '" placeholder="' + (TEST_MODE ? '' : '取得中...') + '" /></div>';
         html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="maint-next" class="input" /></div>';
         html += '</div>';
-        html += '<div class="form-group"><label class="label">整備内容</label><textarea id="maint-desc" class="textarea" rows="3">' + (TEST_MODE?'飛行後の定期点検実施。異常なし。':'') + '</textarea></div>';
+        html += '<div class="form-group"><label class="label">整備内容</label>';
+        html += '<select id="maint-desc-select" class="select" style="margin-bottom:0.5rem;" onchange="selectMaintenanceContent(\'maint-desc-select\',\'maint-desc\')">';
+        html += '<option value="">選択して追記...</option>';
+        state.maintenanceContents.forEach(c => { html += '<option value="' + c + '">' + c + '</option>'; });
+        html += '</select>';
+        html += '<textarea id="maint-desc" class="textarea" rows="3">' + (TEST_MODE?'定期点検実施（異常なし）':'') + '</textarea>';
+        html += '<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">';
+        html += '<input type="text" id="new-maint-content" class="input" placeholder="新しい整備内容を追加..." style="flex:1;" />';
+        html += '<button type="button" onclick="addMaintenanceContent(\'new-maint-content\')" class="btn btn-secondary" style="white-space:nowrap;">＋ 追加</button>';
+        html += '</div></div>';
         html += '<div class="form-group"><label class="label">備考</label><textarea id="maint-notes" class="textarea" rows="2"></textarea></div>';
         html += '<div class="flex gap-2"><button onclick="submitMaintenanceLog()" class="btn btn-primary">保存</button>';
         html += '<button onclick="state.showMaintenanceForm=false;render();" class="btn btn-secondary">キャンセル</button></div></div>';
@@ -2038,11 +2096,12 @@ function renderDronesTab() {
     if (state.showDroneForm) {
         html += '<div class="form-card"><div class="grid grid-2">';
         [['drone-mfg','メーカー *','text'],['drone-model','機種 *','text'],['drone-serial','製造番号 *','text'],
-         ['drone-reg','登録記号','text'],['drone-weight','重量（g）*','number'],['drone-purchase','購入日 *','date']].forEach(([id,label,type]) => {
+         ['drone-reg','登録記号','text'],['drone-weight','重量（g）*','number']].forEach(([id,label,type]) => {
             html += '<div class="form-group"><label class="label">' + label + '</label><input type="' + type + '" id="' + id + '" class="input"' + (id==='drone-reg'?' placeholder="JU-XXXXX"':'') + ' /></div>';
         });
+        html += '<div class="form-group"><label class="label">購入日 *</label><input type="date" id="drone-purchase" class="input" value="' + TODAY + '" /></div>';
         html += '<div class="form-group"><label class="label">アプリ登録年月日</label>'
-              + '<input type="date" id="drone-app-reg-date" class="input" value="' + new Date().toISOString().split('T')[0] + '" /></div>';
+              + '<input type="date" id="drone-app-reg-date" class="input" value="' + TODAY + '" /></div>';
         html += '<div class="form-group"><label class="label">登録前の総飛行時間（分）</label>'
               + '<input type="number" id="drone-pre-mins" class="input" min="0" placeholder="0" /></div>';
         html += '</div><div class="flex gap-2"><button onclick="submitDrone()" class="btn btn-primary">保存</button>';
@@ -2110,8 +2169,8 @@ function renderPilotsTab() {
         ['','一等無人航空機操縦士','二等無人航空機操縦士','なし'].forEach(t => { html += '<option>' + t + '</option>'; });
         html += '</select></div>';
         html += '<div class="form-group"><label class="label">技能証明番号</label><input type="text" id="pilot-license-number" class="input" placeholder="例: 1A-XXXX-XXXX" /></div>';
-        html += '<div class="form-group"><label class="label">発行日</label><input type="date" id="pilot-issue-date" class="input" /></div>';
-        html += '<div class="form-group"><label class="label">有効期限</label><input type="date" id="pilot-expiry-date" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">発行日</label><input type="date" id="pilot-issue-date" class="input" value="' + TODAY + '" /></div>';
+        html += '<div class="form-group"><label class="label">有効期限</label><input type="date" id="pilot-expiry-date" class="input" value="' + TODAY + '" /></div>';
         html += '<div class="form-group"><label class="label">住所</label><input type="text" id="pilot-address" class="input" /></div>';
         html += '<div class="form-group"><label class="label">電話番号</label><input type="tel" id="pilot-phone" class="input" /></div>';
         html += '<div class="form-group"><label class="label">メールアドレス</label><input type="email" id="pilot-email" class="input" /></div>';

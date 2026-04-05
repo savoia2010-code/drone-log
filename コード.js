@@ -69,11 +69,15 @@ function doPost(e) {
           pilots: getPilots(),
           flightLogs: getFlightLogs(),
           maintenanceLogs: getMaintenanceLogs(),
-          flightPurposes: getFlightPurposes()
+          flightPurposes: getFlightPurposes(),
+          maintenanceContents: getMaintenanceContents()
         };
         break;
       case 'addFlightPurpose':
         result = addFlightPurpose(params.data);
+        break;
+      case 'addMaintenanceContent':
+        result = addMaintenanceContent(params.data);
         break;
       case 'getWeather':
         result = getWeather(params.data);
@@ -422,6 +426,28 @@ function addFlightPurpose(purpose) {
   if (!sheet) { sheet = ss.insertSheet('飛行目的'); sheet.appendRow(['purpose']); }
   if (!getFlightPurposes().includes(purpose)) {
     sheet.appendRow([purpose]);
+  }
+  return { success: true };
+}
+
+function getMaintenanceContents() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('整備内容');
+  if (!sheet) return ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'];
+  const data = sheet.getDataRange().getValues();
+  return data.slice(1).map(row => row[0]).filter(c => c);
+}
+
+function addMaintenanceContent(content) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('整備内容');
+  if (!sheet) {
+    sheet = ss.insertSheet('整備内容');
+    sheet.appendRow(['content']);
+    ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'].forEach(c => sheet.appendRow([c]));
+  }
+  if (!getMaintenanceContents().includes(content)) {
+    sheet.appendRow([content]);
   }
   return { success: true };
 }
