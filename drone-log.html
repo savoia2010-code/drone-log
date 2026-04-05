@@ -347,6 +347,49 @@ function getPosition() {
     });
 }
 
+// ─── 場所・気象の自動取得 ─────────────────────────────────────────────────────
+const _autoFetch = {};
+
+async function autoFetchWeather() {
+    if (_autoFetch.weather) return;
+    _autoFetch.weather = true;
+    const el = document.getElementById('flight-weather-input');
+    if (!el || el.value) { _autoFetch.weather = false; return; }
+    el.placeholder = '取得中...';
+    try {
+        const pos = await getPosition();
+        const result = await callGAS('getWeather', { lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const fresh = document.getElementById('flight-weather-input');
+        if (fresh && !fresh.value) fresh.value = result.text || '取得失敗';
+    } catch (e) {
+        const fresh = document.getElementById('flight-weather-input');
+        if (fresh && !fresh.value) fresh.placeholder = '取得失敗（手動入力）';
+    }
+    _autoFetch.weather = false;
+}
+
+async function autoFetchLocation() {
+    if (_autoFetch.location) return;
+    _autoFetch.location = true;
+    const el = document.getElementById('maint-location');
+    if (!el || el.value) { _autoFetch.location = false; return; }
+    el.placeholder = '取得中...';
+    try {
+        const pos = await getPosition();
+        const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude + '&format=json&addressdetails=1&accept-language=ja');
+        const data = await r.json();
+        const a = data.address || {};
+        const parts = [a.prefecture, a.city || a.town || a.village, a.suburb, a.road].filter(Boolean);
+        const addr = parts.join('') || data.display_name || '取得失敗';
+        const fresh = document.getElementById('maint-location');
+        if (fresh && !fresh.value) fresh.value = addr;
+    } catch (e) {
+        const fresh = document.getElementById('maint-location');
+        if (fresh && !fresh.value) fresh.placeholder = '取得失敗（手動入力）';
+    }
+    _autoFetch.location = false;
+}
+
 // ─── 飛行記録：開始 ───────────────────────────────────────────────────────────
 async function startFlight() {
     const droneId = document.getElementById('flight-drone-select').value;
@@ -995,6 +1038,15 @@ function render() {
     if (state.showMaintenanceEditModal)  html += renderMaintenanceEditModal();
 
     document.getElementById('app').innerHTML = html;
+
+    if (!TEST_MODE) {
+        if (state.activeTab === 'flight' && !state.isRecording && !state.loading) {
+            setTimeout(autoFetchWeather, 0);
+        }
+        if (state.activeTab === 'maintenance' && state.showMaintenanceForm && !state.loading) {
+            setTimeout(autoFetchLocation, 0);
+        }
+    }
 }
 
 // ─── 飛行タブ ─────────────────────────────────────────────────────────────────
@@ -1513,7 +1565,7 @@ function renderMaintenanceTab() {
         html += '<div class="form-group"><label class="label">作業者</label><input type="text" id="maint-tech" class="input" value="' + tech + '" /></div>';
         const loc = TEST_MODE ? dummyLocation() : '';
         html += '<div class="form-group"><label class="label">整備場所' + (TEST_MODE?' <span class="badge badge-orange">テスト値</span>':'') + '</label>';
-        html += '<input type="text" id="maint-location" class="input" value="' + loc + '" /></div>';
+        html += '<input type="text" id="maint-location" class="input" value="' + loc + '" placeholder="' + (TEST_MODE ? '' : '取得中...') + '" /></div>';
         html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="maint-next" class="input" /></div>';
         html += '</div>';
         html += '<div class="form-group"><label class="label">整備内容</label><textarea id="maint-desc" class="textarea" rows="3">' + (TEST_MODE?'飛行後の定期点検実施。異常なし。':'') + '</textarea></div>';
