@@ -1216,27 +1216,27 @@ function exportInspectionPDF() {
 
         // 点検テーブル
         body += '<table class="insp-tbl"><thead><tr>'
-            + '<th style="width:8mm">No.</th>'
-            + '<th style="width:40mm">点検項目<br>INSPECTION ITEMS</th>'
-            + '<th style="width:20mm">点検内容</th>'
-            + '<th style="width:15mm">結果<br>RESULT</th>'
-            + '<th>備考<br>REMARKS</th>'
+            + '<th class="tc">No.</th>'
+            + '<th class="item-cell">点検項目<br>INSPECTION ITEMS</th>'
+            + '<th class="desc-cell">点検内容</th>'
+            + '<th class="result-cell">結果<br>RESULT</th>'
+            + '<th class="remarks-cell">備考<br>REMARKS</th>'
             + '</tr></thead><tbody>';
 
         PREFLIGHT_ITEMS.slice(0, 9).forEach((item, i) => {
             const ok = pfChecks[item.id] !== false;
             body += '<tr>'
                 + '<td class="tc">' + (i + 1) + '</td>'
-                + '<td>' + e(item.label) + '<br><span class="en-label">' + e(INSPECTION_ITEMS_EN[i]) + '</span></td>'
+                + '<td class="item-cell">' + e(item.label) + '<span class="en-label">' + e(INSPECTION_ITEMS_EN[i]) + '</span></td>'
                 + '<td class="desc-cell">' + e(item.desc) + '</td>'
                 + '<td class="result-cell ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '○' : '×') + '</td>'
                 + '<td class="remarks-cell">' + (ok ? '' : e('要確認')) + '</td>'
                 + '</tr>';
         });
 
-        // 空白行（余白）
-        for (let i = 0; i < 4; i++) {
-            body += '<tr><td class="tc">' + (10 + i) + '</td><td></td><td></td><td class="result-cell"></td><td></td></tr>';
+        // 予備行（2行）
+        for (let i = 0; i < 2; i++) {
+            body += '<tr><td class="tc">' + (10 + i) + '</td><td class="item-cell"></td><td class="desc-cell"></td><td class="result-cell"></td><td class="remarks-cell"></td></tr>';
         }
 
         body += '</tbody></table>';
@@ -1264,35 +1264,40 @@ function exportInspectionPDF() {
 
     const css = `
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:8pt;color:#000;background:#fff;}
-@page{size:A4 portrait;margin:12mm 14mm 14mm;}
+body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
+@page{size:A4 portrait;margin:8mm 10mm 8mm;}
 .print-btn{display:block;margin:6px auto 10px;padding:6px 24px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
-@media print{.print-btn{display:none;}.page{page-break-after:always;}}
+@media print{.print-btn{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
 .page{width:100%;}
-.form-title{display:flex;align-items:baseline;gap:4mm;border-bottom:1pt solid #000;padding-bottom:1mm;margin-bottom:1.5mm;}
-.form-num{font-size:8pt;font-weight:700;}
-.form-ja{font-size:10pt;font-weight:900;}
-.form-en{font-size:8pt;font-weight:700;flex:1;}
-.form-nr{font-size:8pt;}
-.mach-tbl{width:100%;border-collapse:collapse;font-size:6.5pt;margin-bottom:2mm;}
-.mach-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;white-space:nowrap;}
-.mach-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;}
-.insp-tbl{width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:2mm;}
-.insp-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:1mm 2mm;text-align:center;font-weight:700;}
-.insp-tbl td{border:0.5pt solid #000;padding:1.5mm 2mm;vertical-align:middle;height:10mm;}
-.insp-tbl .tc{text-align:center;}
-.insp-tbl .en-label{font-size:7pt;color:#444;}
-.insp-tbl .desc-cell{font-size:7pt;color:#333;}
-.insp-tbl .result-cell{text-align:center;font-size:12pt;font-weight:900;}
-.insp-tbl .result-cell.ok{color:#000;}
-.insp-tbl .result-cell.ng{color:#000;}
-.insp-tbl .remarks-cell{font-size:7.5pt;}
-.notes-box{border:0.5pt solid #000;margin-bottom:2mm;}
-.notes-title{background:#e8e8e8;border-bottom:0.5pt solid #000;padding:1mm 2mm;font-weight:700;font-size:8pt;}
-.notes-content{padding:2mm;min-height:16mm;font-size:8pt;}
-.footer-tbl{width:100%;border-collapse:collapse;font-size:8pt;}
-.footer-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:1mm 2mm;text-align:center;font-weight:700;white-space:nowrap;}
-.footer-tbl td{border:0.5pt solid #000;padding:1mm 2mm;min-height:8mm;}
+/* タイトル */
+.form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
+.form-num{font-size:7.5pt;font-weight:700;white-space:nowrap;}
+.form-ja{font-size:9.5pt;font-weight:900;white-space:nowrap;}
+.form-en{font-size:7.5pt;font-weight:700;flex:1;}
+.form-nr{font-size:7.5pt;white-space:nowrap;}
+/* 機体情報（2行） */
+.mach-tbl{width:100%;border-collapse:collapse;font-size:6pt;margin-bottom:1mm;table-layout:fixed;}
+.mach-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.5mm 1mm;text-align:center;font-weight:700;width:12%;}
+.mach-tbl td{border:0.5pt solid #000;padding:0.5mm 1mm;text-align:left;width:13%;}
+.mach-tbl small{font-size:5pt;display:block;}
+/* 点検テーブル */
+.insp-tbl{width:100%;border-collapse:collapse;font-size:7.5pt;margin-bottom:1.5mm;table-layout:fixed;}
+.insp-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1.5mm;text-align:center;font-weight:700;line-height:1.3;}
+.insp-tbl td{border:0.5pt solid #000;padding:0.8mm 1.5mm;vertical-align:middle;line-height:1.3;}
+.insp-tbl .tc{text-align:center;width:7%;}
+.insp-tbl .item-cell{width:23%;}
+.insp-tbl .desc-cell{width:40%;font-size:6.5pt;color:#222;}
+.insp-tbl .result-cell{text-align:center;font-size:11pt;font-weight:900;width:10%;}
+.insp-tbl .remarks-cell{width:20%;font-size:7pt;}
+.en-label{font-size:6pt;color:#555;display:block;}
+/* 特記事項 */
+.notes-box{border:0.5pt solid #000;margin-bottom:1.5mm;}
+.notes-title{background:#e8e8e8;border-bottom:0.5pt solid #000;padding:0.8mm 1.5mm;font-weight:700;font-size:7.5pt;}
+.notes-content{padding:1.5mm;min-height:18mm;font-size:7.5pt;}
+/* フッター */
+.footer-tbl{width:100%;border-collapse:collapse;font-size:7.5pt;}
+.footer-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1.5mm;text-align:center;font-weight:700;white-space:nowrap;width:15%;}
+.footer-tbl td{border:0.5pt solid #000;padding:0.8mm 1.5mm;}
 `;
     const periodLabel = (state.pdfFrom || state.pdfTo)
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
