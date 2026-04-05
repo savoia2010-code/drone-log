@@ -304,6 +304,16 @@ function handleLocalStorage(action, data) {
             localStorage.setItem('maintenanceLogs', JSON.stringify(filtered));
             return { success: true };
         }
+        case 'deleteDrone': {
+            const filtered = drones.filter(d => String(d.id) !== String(data.id));
+            localStorage.setItem('drones', JSON.stringify(filtered));
+            return { success: true };
+        }
+        case 'deletePilot': {
+            const filtered = pilots.filter(p => String(p.id) !== String(data.id));
+            localStorage.setItem('pilots', JSON.stringify(filtered));
+            return { success: true };
+        }
         case 'getWeather': return { text: dummyWeather() };
         case 'getAddress': return { address: DUMMY_FLIGHT_LOCATION };
         default: throw new Error('Invalid action');
@@ -763,13 +773,19 @@ async function saveEdit() {
 
 // ─── 機体編集モーダル ─────────────────────────────────────────────────────────
 function openDroneEditModal(droneId) {
-    const drone = state.drones.find(d => d.id === droneId);
+    const drone = state.drones.find(d => String(d.id) === String(droneId));
     if (!drone) return;
     state.editingDrone = { ...drone };
     state.showDroneEditModal = true;
     render();
 }
 function closeDroneEditModal() { state.showDroneEditModal = false; state.editingDrone = null; render(); }
+async function deleteDrone(droneId) {
+    if (!confirm('この機体を削除しますか？\n関連する飛行記録は削除されません。')) return;
+    state.loading = true; render();
+    try { await callGAS('deleteDrone', { id: droneId }); await loadData(); }
+    catch(e) { alert('削除に失敗しました: ' + e.message); state.loading = false; render(); }
+}
 async function saveDroneEdit() {
     const d = state.editingDrone;
     const updated = {
@@ -798,13 +814,19 @@ async function saveDroneEdit() {
 
 // ─── 操縦者編集モーダル ────────────────────────────────────────────────────────
 function openPilotEditModal(pilotId) {
-    const pilot = state.pilots.find(p => p.id === pilotId);
+    const pilot = state.pilots.find(p => String(p.id) === String(pilotId));
     if (!pilot) return;
     state.editingPilot = { ...pilot };
     state.showPilotEditModal = true;
     render();
 }
 function closePilotEditModal() { state.showPilotEditModal = false; state.editingPilot = null; render(); }
+async function deletePilot(pilotId) {
+    if (!confirm('この操縦者を削除しますか？')) return;
+    state.loading = true; render();
+    try { await callGAS('deletePilot', { id: pilotId }); await loadData(); }
+    catch(e) { alert('削除に失敗しました: ' + e.message); state.loading = false; render(); }
+}
 async function savePilotEdit() {
     const p = state.editingPilot;
     const updated = {
@@ -2119,7 +2141,10 @@ function renderDronesTab() {
 
         html += '<div class="card"><div class="flex-between" style="margin-bottom:0.5rem;">';
         html += '<h3 class="font-bold" style="font-size:1.1rem;">' + d.manufacturer + ' ' + d.model + '</h3>';
+        html += '<div class="flex gap-2">';
         html += '<button onclick="openDroneEditModal(\'' + d.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+        html += '<button onclick="deleteDrone(\'' + d.id + '\')" class="btn btn-danger btn-small">🗑</button>';
+        html += '</div>';
         html += '</div>';
         // 飛行統計バナー
         html += '<div style="background:#eff6ff;border-radius:0.375rem;padding:0.5rem 0.75rem;margin-bottom:0.75rem;">';
@@ -2195,7 +2220,10 @@ function renderPilotsTab() {
     state.pilots.forEach(pilot => {
         html += '<div class="card"><div class="flex-between" style="margin-bottom:0.5rem;">';
         html += '<h3 class="font-bold" style="font-size:1.1rem;">' + pilot.name + '</h3>';
+        html += '<div class="flex gap-2">';
         html += '<button onclick="openPilotEditModal(\'' + pilot.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+        html += '<button onclick="deletePilot(\'' + pilot.id + '\')" class="btn btn-danger btn-small">🗑</button>';
+        html += '</div>';
         html += '</div>';
         html += '<div class="text-sm" style="line-height:1.8;">';
         html += '<p><span class="font-medium">技能証明:</span> ' + pilot.licenseType + '</p>';

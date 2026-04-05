@@ -63,6 +63,12 @@ function doPost(e) {
       case 'deleteMaintenanceLog':
         result = deleteMaintenanceLog(params.data);
         break;
+      case 'deleteDrone':
+        result = deleteDrone(params.data);
+        break;
+      case 'deletePilot':
+        result = deletePilot(params.data);
+        break;
       case 'getAllData':
         result = {
           drones: getDrones(),
@@ -155,6 +161,21 @@ function updateDrone(drone) {
   return { error: 'レコードが見つかりません' };
 }
 
+function deleteDrone(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('機体');
+  if (!sheet) return { error: 'シートが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  const idCol = values[0].indexOf('id');
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idCol]) === String(data.id)) {
+      sheet.deleteRow(r + 1);
+      return { success: true };
+    }
+  }
+  return { error: 'レコードが見つかりません' };
+}
+
 // ─── 操縦者 ──────────────────────────────────────────────────────────────────
 
 function getPilots() {
@@ -220,6 +241,21 @@ function updatePilot(pilot) {
           sheet.getRange(r + 1, c + 1).setValue(val);
         }
       });
+      return { success: true };
+    }
+  }
+  return { error: 'レコードが見つかりません' };
+}
+
+function deletePilot(data) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('操縦者');
+  if (!sheet) return { error: 'シートが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  const idCol = values[0].indexOf('id');
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idCol]) === String(data.id)) {
+      sheet.deleteRow(r + 1);
       return { success: true };
     }
   }
