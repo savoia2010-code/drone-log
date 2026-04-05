@@ -430,32 +430,17 @@ function addFlightPurpose(purpose) {
 
 function getAddress(data) {
   try {
-    const lat = parseFloat(data.lat);
-    const lon = parseFloat(data.lon);
-    Logger.log('getAddress called: lat=' + lat + ' lon=' + lon);
-
     const geocoder = Maps.newGeocoder().setLanguage('ja');
-    const result = geocoder.reverseGeocode(lat, lon);
-    Logger.log('Maps.reverseGeocode status: ' + result.status);
-    Logger.log('Maps.reverseGeocode results count: ' + (result.results ? result.results.length : 0));
-
+    const result = geocoder.reverseGeocode(parseFloat(data.lat), parseFloat(data.lon));
     if (result.status !== 'OK' || !result.results || result.results.length === 0) {
-      Logger.log('住所取得失敗: status=' + result.status);
-      return { error: 'status=' + result.status, address: '', debug: { status: result.status } };
+      return { error: 'status=' + result.status, address: '' };
     }
-
-    const raw = result.results[0].formatted_address;
-    Logger.log('formatted_address (raw): ' + raw);
-
-    const addr = raw
+    const addr = result.results[0].formatted_address
       .replace(/^日本[、,]\s*/, '')
       .replace(/〒\d{3}-\d{4}\s*/, '')
       .trim();
-    Logger.log('formatted_address (cleaned): ' + addr);
-
-    return { success: true, address: addr, debug: { raw: raw } };
+    return { success: true, address: addr };
   } catch(error) {
-    Logger.log('住所取得エラー: ' + error.toString() + '\n' + error.stack);
     return { error: error.toString(), address: '' };
   }
 }
