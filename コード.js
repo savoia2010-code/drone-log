@@ -76,7 +76,8 @@ function doPost(e) {
           flightLogs: getFlightLogs(),
           maintenanceLogs: getMaintenanceLogs(),
           flightPurposes: getFlightPurposes(),
-          maintenanceContents: getMaintenanceContents()
+          maintenanceContents: getMaintenanceContents(),
+          technicians: getTechnicians()
         };
         break;
       case 'addFlightPurpose':
@@ -84,6 +85,9 @@ function doPost(e) {
         break;
       case 'addMaintenanceContent':
         result = addMaintenanceContent(params.data);
+        break;
+      case 'addTechnician':
+        result = addTechnician(params.data);
         break;
       case 'getWeather':
         result = getWeather(params.data);
@@ -485,6 +489,22 @@ function addMaintenanceContent(content) {
   if (!getMaintenanceContents().includes(content)) {
     sheet.appendRow([content]);
   }
+  return { success: true };
+}
+
+function getTechnicians() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('作業者');
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  return data.slice(1).map(row => row[0]).filter(t => t);
+}
+
+function addTechnician(name) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('作業者');
+  if (!sheet) { sheet = ss.insertSheet('作業者'); sheet.appendRow(['name']); }
+  if (!getTechnicians().includes(name)) { sheet.appendRow([name]); }
   return { success: true };
 }
 

@@ -175,6 +175,7 @@ let state = {
     flightLogs: [], maintenanceLogs: [], drones: [], pilots: [],
     flightPurposes: ['空撮', '測量', '点検', '農薬散布', '配送', '訓練', '趣味'],
     maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
+    technicians: [],
     selectedLogDroneId: '',
     showMaintenanceForm: false, showDroneForm: false, showPilotForm: false,
     searchTerm: '', maintenanceChecked: true, loading: false, error: null,
@@ -241,6 +242,7 @@ function handleLocalStorage(action, data) {
     const maintenanceLogs = JSON.parse(localStorage.getItem('maintenanceLogs') || '[]');
     const flightPurposes = JSON.parse(localStorage.getItem('flightPurposes') || '["空撮","測量","点検","農薬散布","配送","訓練","趣味"]');
     const maintenanceContents = JSON.parse(localStorage.getItem('maintenanceContents') || '["定期点検実施（異常なし）","機体全体の目視点検","プロペラの点検・清掃","バッテリーの点検・充電確認","センサー類の動作確認","モーターの点検","フレームの点検・清掃","部品交換"]');
+    const technicians = JSON.parse(localStorage.getItem('technicians') || '[]');
 
     switch(action) {
         case 'getDrones': return drones;
@@ -278,12 +280,15 @@ function handleLocalStorage(action, data) {
             return { success: true, id: n.id };
         }
         case 'getAllData':
-            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes, maintenanceContents };
+            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes, maintenanceContents, technicians };
         case 'addFlightPurpose':
             if (!flightPurposes.includes(data)) { flightPurposes.push(data); localStorage.setItem('flightPurposes', JSON.stringify(flightPurposes)); }
             return { success: true };
         case 'addMaintenanceContent':
             if (!maintenanceContents.includes(data)) { maintenanceContents.push(data); localStorage.setItem('maintenanceContents', JSON.stringify(maintenanceContents)); }
+            return { success: true };
+        case 'addTechnician':
+            if (!technicians.includes(data)) { technicians.push(data); localStorage.setItem('technicians', JSON.stringify(technicians)); }
             return { success: true };
         case 'updatePilot': {
             const idx = pilots.findIndex(p => p.id === data.id);
@@ -338,6 +343,7 @@ async function loadData() {
 
         if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
         if (data.maintenanceContents) { state.maintenanceContents = data.maintenanceContents; }
+        if (data.technicians) { state.technicians = data.technicians; }
 
     } catch(e) { state.error = 'データの読み込みに失敗しました: ' + e.message; }
     finally { state.loading = false; render(); }
@@ -350,6 +356,7 @@ function clearCache() {
     Object.assign(state, { drones: [], pilots: [], flightLogs: [], maintenanceLogs: [],
         flightPurposes: ['空撮','測量','点検','農薬散布','配送','訓練','趣味'],
         maintenanceContents: ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'],
+        technicians: [],
         isRecording: false, waitingForResume: false, currentFlight: null, sessions: [],
         currentSessionNum: 0, currentSessionSecs: 0,
         showPostFlightModal: false, showEditModal: false, editingLog: null,
@@ -1016,6 +1023,64 @@ function toggleAccordion(bodyId, arrowId) {
     const isOpen = body.style.display !== 'none';
     body.style.display = isOpen ? 'none' : 'block';
     if (arrow) arrow.textContent = isOpen ? '▼ 展開してチェック' : '▲ 閉じる';
+}
+
+// 作業者セレクトのHTML生成（操縦者＋追加済み、追加ボタン付き）
+function _techSelectHtml(selectId, currentVal, addInputId) {
+    const allPilotNames = state.pilots.map(p => p.name);
+    let h = '<select id="' + selectId + '" class="select"><option value="">選択してください</option>';
+    if (state.pilots.length) {
+        h += '<optgroup label="操縦者">';
+        state.pilots.forEach(p => {
+            h += '<option value="' + p.name + '"' + (p.name === currentVal ? ' selected' : '') + '>' + p.name + '</option>';
+        });
+        h += '</optgroup>';
+    }
+    if (state.technicians.length) {
+        h += '<optgroup label="追加済み作業者">';
+        state.technicians.forEach(t => {
+            h += '<option value="' + t + '"' + (t === currentVal ? ' selected' : '') + '>' + t + '</option>';
+        });
+        h += '</optgroup>';
+    }
+    // 既存値がどちらにもない場合（旧データ互換）
+    if (currentVal && !allPilotNames.includes(currentVal) && !state.technicians.includes(currentVal)) {
+        h += '<option value="' + currentVal + '" selected>' + currentVal + '</option>';
+    }
+    h += '</select>';
+    h += '<div style="display:flex;gap:0.5rem;margin-top:0.5rem;">';
+    h += '<input type="text" id="' + addInputId + '" class="input" placeholder="新しい作業者を追加..." style="flex:1;" />';
+    h += '<button type="button" onclick="addTechnician(\'' + addInputId + '\')" class="btn btn-secondary" style="white-space:nowrap;">＋ 追加</button>';
+    h += '</div>';
+    return h;
+}
+
+// 整備作業者の追加
+function addTechnician(inputId) {
+    const input = document.getElementById(inputId);
+    const val = input ? input.value.trim() : '';
+    if (!val) return;
+    const pilotNames = state.pilots.map(p => p.name);
+    if (state.technicians.includes(val) || pilotNames.includes(val)) { input.value = ''; return; }
+    state.technicians.push(val);
+    if (TEST_MODE) localStorage.setItem('technicians', JSON.stringify(state.technicians));
+    else callGAS('addTechnician', val);
+    // re-renderなしでDOMに追加・選択
+    ['maint-tech', 'me-tech'].forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        let grp = sel.querySelector('optgroup[label="追加済み作業者"]');
+        if (!grp) {
+            grp = document.createElement('optgroup');
+            grp.label = '追加済み作業者';
+            sel.appendChild(grp);
+        }
+        const opt = document.createElement('option');
+        opt.value = val; opt.textContent = val;
+        grp.appendChild(opt);
+        sel.value = val;
+    });
+    input.value = '';
 }
 
 // 整備内容の選択肢からテキストエリアへ入力
@@ -2193,9 +2258,7 @@ function renderMaintenanceEditModal() {
         html += '<option' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
     });
     html += '</select></div>';
-    html += '<div class="form-group"><label class="label">作業者</label><select id="me-tech" class="select"><option value="">選択してください</option>';
-    state.pilots.forEach(p => { html += '<option value="' + p.name + '"' + (p.name === (m.technician||'') ? ' selected' : '') + '>' + p.name + '</option>'; });
-    html += '</select></div>';
+    html += '<div class="form-group"><label class="label">作業者</label>' + _techSelectHtml('me-tech', m.technician||'', 'new-tech-input-edit') + '</div>';
     html += '<div class="form-group"><label class="label">整備場所</label><input type="text" id="me-location" class="input" value="' + (m.maintenanceLocation||'') + '" /></div>';
     html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="me-next" class="input" value="' + (m.nextDate||'') + '" /></div>';
     html += '</div>';
@@ -2318,9 +2381,7 @@ function renderMaintenanceTab() {
         html += '<div class="form-group"><label class="label">整備種別</label><select id="maint-type" class="select">';
         ['','定期点検','修理','部品交換','清掃','メーカー点検','その他'].forEach(t => { html += '<option>' + t + '</option>'; });
         html += '</select></div>';
-        html += '<div class="form-group"><label class="label">作業者</label><select id="maint-tech" class="select"><option value="">選択してください</option>';
-        state.pilots.forEach(p => { html += '<option value="' + p.name + '"' + (TEST_MODE && state.pilots[0]?.name === p.name ? ' selected' : '') + '>' + p.name + '</option>'; });
-        html += '</select></div>';
+        html += '<div class="form-group"><label class="label">作業者</label>' + _techSelectHtml('maint-tech', TEST_MODE ? (state.pilots[0]?.name || '') : '', 'new-tech-input') + '</div>';
         const loc = TEST_MODE ? dummyLocation() : '';
         html += '<div class="form-group"><label class="label">整備場所' + (TEST_MODE?' <span class="badge badge-orange">テスト値</span>':'') + '</label>';
         html += '<input type="text" id="maint-location" class="input" value="' + loc + '" placeholder="' + (TEST_MODE ? '' : '取得中...') + '" /></div>';
