@@ -1440,6 +1440,132 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
     w.document.close();
 }
 
+// ─── 様式3：整備記録 ────────────────────────────────────────────────────────
+function exportMaintenancePDF() {
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされています。許可してから再試行してください。'); return; }
+    const e = _pdfEsc;
+
+    // 期間フィルター（整備日で絞り込み）
+    let allLogs = [...state.maintenanceLogs].reverse(); // 古い順
+    if (state.pdfFrom) allLogs = allLogs.filter(l => String(l.date).slice(0,10) >= state.pdfFrom);
+    if (state.pdfTo)   allLogs = allLogs.filter(l => String(l.date).slice(0,10) <= state.pdfTo);
+
+    const ROWS_PER_PAGE = 16;
+    let body = '';
+
+    // 機体ごとにページグループ
+    const drones = state.drones.length ? state.drones : [{ id: '', manufacturer: '', model: '' }];
+    drones.forEach(drone => {
+        const sid = String(drone.id || '');
+        const droneLogs = state.drones.length
+            ? allLogs.filter(l => String(l.droneId) === sid)
+            : allLogs;
+        if (!droneLogs.length) return;
+
+        const totalPages = Math.max(1, Math.ceil(droneLogs.length / ROWS_PER_PAGE));
+        for (let pg = 0; pg < totalPages; pg++) {
+            const pageRows = droneLogs.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
+
+            body += '<div class="page">';
+
+            // タイトル
+            body += '<div class="form-title">';
+            body += '<span class="form-num">（様式３）整備記録</span>';
+            body += '<span class="form-ja">無人航空機の整備記録</span>';
+            body += '<span class="form-nr">（NR.' + (pg + 1) + '）</span>';
+            body += '</div>';
+
+            // 機体情報
+            body += _pdfMachineRow(drone);
+
+            // 整備記録テーブル
+            body += '<table class="maint-tbl"><thead><tr>'
+                + '<th class="mn">No.</th>'
+                + '<th class="md">整備年月日</th>'
+                + '<th class="mt">整備の種別</th>'
+                + '<th class="mc">整備内容</th>'
+                + '<th class="me">整備実施者</th>'
+                + '<th class="ml">整備場所</th>'
+                + '<th class="mx">次回整備予定日</th>'
+                + '<th class="mb">備考</th>'
+                + '</tr></thead><tbody>';
+
+            pageRows.forEach((log, i) => {
+                const rowNo = pg * ROWS_PER_PAGE + i + 1;
+                body += '<tr>'
+                    + '<td class="mn tc">' + rowNo + '</td>'
+                    + '<td class="md">' + e(_pdfFmtDate(log.date)) + '</td>'
+                    + '<td class="mt">' + e(log.type || '') + '</td>'
+                    + '<td class="mc">' + e(log.description || '') + '</td>'
+                    + '<td class="me">' + e(log.technician || '') + '</td>'
+                    + '<td class="ml">' + e(log.maintenanceLocation || '') + '</td>'
+                    + '<td class="mx">' + e(_pdfFmtDate(log.nextDate)) + '</td>'
+                    + '<td class="mb">' + e(log.notes || '') + '</td>'
+                    + '</tr>';
+            });
+
+            // 空行で残りを埋める
+            for (let i = pageRows.length; i < ROWS_PER_PAGE; i++) {
+                const rowNo = pg * ROWS_PER_PAGE + i + 1;
+                body += '<tr><td class="mn tc">' + rowNo + '</td><td class="md"></td><td class="mt"></td><td class="mc"></td><td class="me"></td><td class="ml"></td><td class="mx"></td><td class="mb"></td></tr>';
+            }
+
+            body += '</tbody></table>';
+            body += '</div>'; // .page
+        }
+    });
+
+    if (!body) {
+        body = '<p style="text-align:center;color:#888;margin:16mm 0;">整備記録がありません</p>';
+    }
+
+    const css = `
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
+@page{size:A4 portrait;margin:8mm 10mm 8mm;}
+.no-print{display:flex;gap:8px;justify-content:center;margin:6px auto 10px;}
+.no-print button{padding:6px 20px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.btn-print{background:#1e40af;color:#fff;}
+.btn-close-win{background:#6b7280;color:#fff;}
+@media print{.no-print{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
+.page{width:100%;}
+/* タイトル */
+.form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
+.form-num{font-size:7.5pt;font-weight:700;white-space:nowrap;}
+.form-ja{font-size:9.5pt;font-weight:900;white-space:nowrap;}
+.form-nr{font-size:7.5pt;white-space:nowrap;margin-left:auto;}
+/* 機体情報（2行） */
+.mach-tbl{width:100%;border-collapse:collapse;font-size:6pt;margin-bottom:1.5mm;table-layout:fixed;}
+.mach-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.5mm 1mm;text-align:center;font-weight:700;width:12%;}
+.mach-tbl td{border:0.5pt solid #000;padding:0.5mm 1mm;text-align:left;width:13%;}
+/* 整備記録テーブル */
+.maint-tbl{width:100%;border-collapse:collapse;font-size:7pt;table-layout:fixed;}
+.maint-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;line-height:1.3;}
+.maint-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;vertical-align:top;line-height:1.4;word-break:break-all;min-height:7mm;}
+.tc{text-align:center;}
+/* 列幅 */
+.mn{width:4%;}
+.md{width:10%;}
+.mt{width:9%;}
+.mc{width:33%;}
+.me{width:10%;}
+.ml{width:15%;}
+.mx{width:10%;}
+.mb{width:9%;}
+/* 異常行 */
+.ng-row td{background:#fff0f0;}
+`;
+
+    const periodLabel = (state.pdfFrom || state.pdfTo)
+        ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
+    const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>整備記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
+        + '<div class="no-print"><button class="btn-print" onclick="window.print()">🖨 印刷 / PDFで保存</button><button class="btn-close-win" onclick="window.close()">✕ 閉じる</button></div>'
+        + body + '</body></html>';
+    w.document.write(html);
+    w.document.close();
+}
+
 // ─── フォーム送信ヘルパー ────────────────────────────────────────────────────
 function submitPilot() {
     const pilot = {
@@ -2132,6 +2258,7 @@ function renderLogsTab() {
     html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
     html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success">飛行記録 PDF</button>';
     html += '<button onclick="exportInspectionPDF()" class="btn btn-success">点検記録 PDF</button>';
+    html += '<button onclick="exportMaintenancePDF()" class="btn btn-success">整備記録 PDF</button>';
     html += '<button onclick="exportData()" class="btn btn-dark">JSON 出力</button>';
     html += '</div></div>';
 
