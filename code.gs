@@ -96,7 +96,7 @@ function doPost(e) {
 function getDrones() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('機体');
-  if (!sheet) { ss.insertSheet('機体'); return []; }
+  if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   const headers = data[0];
@@ -153,7 +153,7 @@ function updateDrone(drone) {
 function getPilots() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('操縦者');
-  if (!sheet) { ss.insertSheet('操縦者'); return []; }
+  if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   const headers = data[0];
@@ -224,7 +224,7 @@ function updatePilot(pilot) {
 function getFlightLogs() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('飛行記録');
-  if (!sheet) { ss.insertSheet('飛行記録'); return []; }
+  if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   const headers = data[0];
@@ -313,7 +313,7 @@ function updateFlightLog(log) {
 function getMaintenanceLogs() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const sheet = ss.getSheetByName('整備記録');
-  if (!sheet) { ss.insertSheet('整備記録'); return []; }
+  if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   const headers = data[0];
