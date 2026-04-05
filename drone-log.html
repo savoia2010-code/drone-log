@@ -283,6 +283,7 @@ function handleLocalStorage(action, data) {
             localStorage.setItem('maintenanceLogs', JSON.stringify(filtered));
             return { success: true };
         }
+        case 'getWeather': return { text: dummyWeather() };
         default: throw new Error('Invalid action');
     }
 }
@@ -292,7 +293,6 @@ async function loadData() {
     state.loading = true; state.error = null; render();
     try {
         const data = await callGAS('getAllData');
-        console.log('[loadData] getAllData response:', JSON.stringify(data));
         state.drones = data.drones || []; state.pilots = data.pilots || [];
         state.flightLogs = data.flightLogs || []; state.maintenanceLogs = data.maintenanceLogs || [];
 
@@ -303,14 +303,7 @@ async function loadData() {
             state.drones = upd.drones || []; state.pilots = upd.pilots || [];
         }
 
-        if (TEST_MODE) {
-            const saved = localStorage.getItem('flightPurposes');
-            if (saved) {
-                const custom = JSON.parse(saved);
-                const defaults = ['空撮','測量','点検','農薬散布','配送','訓練','趣味'];
-                state.flightPurposes = defaults.concat(custom.filter(p => !defaults.includes(p)));
-            }
-        } else if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
+        if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
 
     } catch(e) { state.error = 'データの読み込みに失敗しました: ' + e.message; }
     finally { state.loading = false; render(); }
@@ -431,7 +424,7 @@ async function startFlight() {
     const allOk = Object.values(preflightChecks).every(v => v);
     if (!allOk && !confirm('飛行前点検に「正常」未確認の項目があります。このまま飛行を開始しますか？')) return;
 
-    const takeoffCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+    const takeoffCoords = await getCurrentCoordinates();
     const now = new Date();
     const startTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
@@ -521,7 +514,7 @@ async function swapBattery() {
     clearInterval(state.timerInterval); state.timerInterval = null;
 
     const landingTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    const landingCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+    const landingCoords = await getCurrentCoordinates();
 
     // 完了セッションとして記録
     state.sessions.push({
@@ -542,7 +535,7 @@ async function resumeFlight() {
     if (!state.isRecording || !state.waitingForResume) return;
 
     const takeoffTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-    const takeoffCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+    const takeoffCoords = await getCurrentCoordinates();
 
     state.currentSessionNum++;
     state.currentSessionSecs       = 0;
@@ -564,7 +557,7 @@ async function endFlight() {
         clearInterval(state.timerInterval); state.timerInterval = null;
 
         const landingTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-        const landingCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+        const landingCoords = await getCurrentCoordinates();
 
         state.sessions.push({
             num:            state.currentSessionNum,
