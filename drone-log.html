@@ -934,12 +934,35 @@ function onDroneSelect(droneId) {
         }
     }
 
+    // 飛行形態
+    const FM_LABELS = [
+        ['fm_01','目視内飛行'],['fm_02','目視外飛行'],['fm_03','夜間飛行'],
+        ['fm_04','人口集中地区（DID）上空'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
+        ['fm_07','危険物輸送'],['fm_08','物件投下'],['fm_09','人又は物件から30m未満'],
+    ];
+    if (last.flightMode) {
+        const modes = last.flightMode.split('、');
+        FM_LABELS.forEach(([id, label]) => {
+            const cb = document.getElementById(id);
+            if (cb) cb.checked = modes.includes(label);
+        });
+    }
+
     // 前回ヒント表示
     const hint = document.getElementById('drone-autofill-hint');
     if (hint) {
         hint.textContent = '✔ ' + last.date + ' の記録から自動入力しました';
         hint.style.display = 'block';
     }
+}
+
+function toggleAccordion(bodyId, arrowId) {
+    const body = document.getElementById(bodyId);
+    const arrow = document.getElementById(arrowId);
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (arrow) arrow.textContent = isOpen ? '▼ 展開してチェック' : '▲ 閉じる';
 }
 
 // ─── ユーティリティ ───────────────────────────────────────────────────────────
@@ -1527,56 +1550,40 @@ function renderFlightTab() {
         html += '</div>';
         html += '<p id="drone-autofill-hint" style="display:none;font-size:0.8rem;color:#059669;margin:-0.5rem 0 1rem;"></p>';
 
-        // ── 飛行形態（アコーディオン）──────────────────────────────────────
-        html += '<div class="accordion-section" style="margin-bottom:1rem;">';
-        html += '<button onclick="state.showFlightModeSection=!state.showFlightModeSection;render();" class="accordion-header">';
-        html += '<span class="font-bold">飛行形態（特定飛行）</span>';
-        html += '<span class="accordion-arrow">' + (state.showFlightModeSection ? '▲ 閉じる' : '▼ 展開して選択') + '</span>';
-        html += '</button>';
-        if (state.showFlightModeSection) {
-            html += '<div class="accordion-body">';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;margin-bottom:0.75rem;">';
-            [
-                ['fm_01', '目視内飛行'],
-                ['fm_02', '目視外飛行'],
-                ['fm_03', '夜間飛行'],
-                ['fm_04', '人口集中地区（DID）上空'],
-                ['fm_05', '高度150m以上'],
-                ['fm_06', '催し場所上空'],
-                ['fm_07', '危険物輸送'],
-                ['fm_08', '物件投下'],
-                ['fm_09', '人又は物件から30m未満'],
-            ].forEach(([id, label]) => {
-                html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
-                      + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
-            });
-            html += '</div>';
-            html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
-            html += '<label style="white-space:nowrap;font-size:0.9rem;color:#374151;">その他:</label>';
-            html += '<input type="text" id="fm_other_text" class="input" style="flex:1;" placeholder="自由記入" />';
-            html += '</div></div>';
-        } else {
-            html += '<input type="hidden" id="fm_other_text" value="" />';
-        }
+        // ── 飛行形態（常時表示）────────────────────────────────────────────
+        html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;">';
+        html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態（特定飛行）</p>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;margin-bottom:0.75rem;">';
+        [
+            ['fm_01', '目視内飛行'],
+            ['fm_02', '目視外飛行'],
+            ['fm_03', '夜間飛行'],
+            ['fm_04', '人口集中地区（DID）上空'],
+            ['fm_05', '高度150m以上'],
+            ['fm_06', '催し場所上空'],
+            ['fm_07', '危険物輸送'],
+            ['fm_08', '物件投下'],
+            ['fm_09', '人又は物件から30m未満'],
+        ].forEach(([id, label]) => {
+            html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
+                  + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
+        });
         html += '</div>';
+        html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
+        html += '<label style="white-space:nowrap;font-size:0.9rem;color:#374151;">その他:</label>';
+        html += '<input type="text" id="fm_other_text" class="input" style="flex:1;" placeholder="自由記入" />';
+        html += '</div></div>';
 
-        // ── 飛行前点検（アコーディオン）────────────────────────────────────
+        // ── 飛行前点検（DOM折りたたみ：常にDOMに存在、display切替のみ）──────
         html += '<div class="accordion-section" style="margin-bottom:1rem;">';
-        html += '<button onclick="state.showPreflightSection=!state.showPreflightSection;render();" class="accordion-header">';
+        html += '<button onclick="toggleAccordion(\'preflight-body\',\'preflight-arrow\')" class="accordion-header">';
         html += '<span class="font-bold">飛行前点検（' + PREFLIGHT_ITEMS.length + '項目）</span>';
-        html += '<span class="accordion-arrow">' + (state.showPreflightSection ? '▲ 閉じる' : '▼ 展開してチェック') + '</span>';
+        html += '<span id="preflight-arrow" class="accordion-arrow">▼ 展開してチェック</span>';
         html += '</button>';
-        if (state.showPreflightSection) {
-            html += '<div class="accordion-body">';
-            html += renderCheckTable(PREFLIGHT_ITEMS, '', '#eff6ff', '#1e40af', '#bfdbfe', 'preflight-notes');
-            html += '</div>';
-        } else {
-            // 非表示でも ID が存在しないと startFlight() が落ちるため hidden input で代替
-            PREFLIGHT_ITEMS.forEach(item => {
-                html += '<input type="hidden" id="' + item.id + '" data-checked="true" />';
-            });
-            html += '<input type="hidden" id="preflight-notes" value="異常無し" />';
-        }
+        // 常にDOMに保持し display:none で隠す → 開閉しても値がリセットされない
+        html += '<div id="preflight-body" class="accordion-body" style="display:none;">';
+        html += renderCheckTable(PREFLIGHT_ITEMS, '', '#eff6ff', '#1e40af', '#bfdbfe', 'preflight-notes');
+        html += '</div>';
         html += '</div>';
 
         html += '<div class="flex" style="align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">';
