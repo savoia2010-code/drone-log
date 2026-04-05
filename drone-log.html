@@ -208,7 +208,9 @@ async function callGAS(action, data) {
     if (GAS_URL === 'YOUR_GAS_WEB_APP_URL_HERE') { alert('GASのURLを設定してください'); throw new Error('GAS URL not configured'); }
     try {
         const res = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action, data }) });
-        const result = await res.json();
+        const text = await res.text();
+        console.log('[callGAS] action:', action, 'status:', res.status, 'response:', text.slice(0, 300));
+        const result = JSON.parse(text);
         if (result.error) throw new Error(result.error);
         return result;
     } catch (e) { console.error('GAS API Error:', e); throw e; }
@@ -290,6 +292,7 @@ async function loadData() {
     state.loading = true; state.error = null; render();
     try {
         const data = await callGAS('getAllData');
+        console.log('[loadData] getAllData response:', JSON.stringify(data));
         state.drones = data.drones || []; state.pilots = data.pilots || [];
         state.flightLogs = data.flightLogs || []; state.maintenanceLogs = data.maintenanceLogs || [];
 
