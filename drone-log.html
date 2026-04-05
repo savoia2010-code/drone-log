@@ -168,7 +168,7 @@ const POSTFLIGHT_ITEMS = [
 ];
 
 // ─── 状態管理 ─────────────────────────────────────────────────────────────────
-const TODAY = TODAY;
+const TODAY = new Date().toISOString().split('T')[0];
 
 let state = {
     activeTab: 'flight',
