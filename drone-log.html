@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ドローン日誌">
+    <title>無人航空機 飛行日誌・整備記録</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f9fafb; line-height: 1.5;
+        }
+        .container { max-width: 1152px; margin: 0 auto; padding: 0 1rem; }
+        .header { background: #2563eb; color: white; padding: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .header-content { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; }
+        .title { font-size: 1.5rem; font-weight: bold; }
+        .btn {
+            padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer;
+            font-size: 16px; font-weight: 500; display: inline-flex; align-items: center; gap: 0.5rem;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary   { background: #2563eb; color: white; }
+        .btn-primary:hover:not(:disabled)   { background: #1d4ed8; }
+        .btn-secondary { background: #d1d5db; color: #374151; }
+        .btn-secondary:hover:not(:disabled) { background: #9ca3af; }
+        .btn-dark    { background: #1e40af; color: white; }
+        .btn-dark:hover:not(:disabled)    { background: #1e3a8a; }
+        .btn-success { background: #059669; color: white; }
+        .btn-success:hover:not(:disabled) { background: #047857; }
+        .btn-danger  { background: #dc2626; color: white; }
+        .btn-danger:hover:not(:disabled)  { background: #b91c1c; }
+        .btn-warning { background: #d97706; color: white; }
+        .btn-warning:hover:not(:disabled) { background: #b45309; }
+        .btn-start { background: #10b981; color: white; font-size: 1.25rem; padding: 1rem 2rem; }
+        .btn-start:hover:not(:disabled)  { background: #059669; }
+        .btn-stop  { background: #ef4444; color: white; font-size: 1.25rem; padding: 1rem 2rem; }
+        .btn-stop:hover:not(:disabled)   { background: #dc2626; }
+        .btn-small { padding: 0.25rem 0.5rem; font-size: 13px; }
+        .tabs { display: flex; gap: 0.5rem; margin: 1.5rem 0; overflow-x: auto; }
+        .tab { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 500; border: none; cursor: pointer; white-space: nowrap; font-size: 16px; }
+        .tab-active   { background: #2563eb; color: white; }
+        .tab-inactive { background: white; color: #374151; }
+        .search-box   { position: relative; margin-bottom: 1rem; }
+        .search-input { width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 16px; }
+        .card      { background: white; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+        .form-card { background: white; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; }
+        .flight-control { background: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem; text-align: center; }
+        .recording-indicator { background: #fef2f2; border: 2px solid #dc2626; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+        .timer       { font-size: 2.5rem; font-weight: bold; color: #dc2626; margin: 0.5rem 0; font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+        .timer-total { font-size: 1rem; color: #6b7280; margin-bottom: 1rem; }
+        .grid   { display: grid; gap: 1rem; }
+        .grid-2 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+        .form-group { margin-bottom: 1rem; }
+        .label { display: block; font-size: 16px; font-weight: 500; margin-bottom: 0.25rem; color: #374151; }
+        .input, .select, .textarea {
+            width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db;
+            border-radius: 0.5rem; font-size: 16px;
+        }
+        .textarea { resize: vertical; font-family: inherit; }
+        .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 0.25rem; font-size: 0.875rem; font-weight: 500; }
+        .badge-blue   { background: #dbeafe; color: #1e40af; }
+        .badge-green  { background: #d1fae5; color: #065f46; }
+        .badge-orange { background: #ffedd5; color: #9a3412; font-size: 0.75rem; padding: 0.125rem 0.5rem; }
+        .badge-red    { background: #fee2e2; color: #991b1b; font-size: 0.75rem; }
+        .text-sm   { font-size: 0.875rem; }
+        .text-xs   { font-size: 0.75rem; }
+        .text-gray { color: #6b7280; }
+        .font-bold   { font-weight: 700; }
+        .font-medium { font-weight: 500; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .pt-2 { padding-top: 0.5rem; }
+        .border-t { border-top: 1px solid #e5e7eb; }
+        .flex         { display: flex; }
+        .flex-between { display: flex; justify-content: space-between; align-items: flex-start; }
+        .flex-center  { display: flex; justify-content: center; align-items: center; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-1 { gap: 0.25rem; }
+        .empty-state { text-align: center; padding: 3rem 0; color: #6b7280; }
+        .checkbox { width: 1.25rem; height: 1.25rem; cursor: pointer; flex-shrink: 0; }
+        .loading { text-align: center; padding: 2rem; color: #6b7280; }
+        .error { background: #fee; color: #c00; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; }
+        .test-mode-banner {
+            background: #fef3c7; border: 1px solid #f59e0b; color: #92400e;
+            padding: 0.375rem 0.75rem; border-radius: 0.375rem; font-size: 0.813rem;
+            display: flex; align-items: center; gap: 0.375rem;
+        }
+        /* 点検チェックリスト */
+        .check-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        .check-table th { background: #eff6ff; padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; color: #1e40af; border: 1px solid #bfdbfe; }
+        .check-table td { padding: 0.5rem 0.75rem; border: 1px solid #e5e7eb; vertical-align: middle; }
+        .check-table tr:nth-child(even) td { background: #f9fafb; }
+        .check-table .col-no    { width: 2.5rem; text-align: center; }
+        .check-table .col-item  { width: 40%; }
+        .check-table .col-check { width: 35%; }
+        .check-table .col-ok    { width: 6rem; text-align: center; }
+        .check-normal-label { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 500; color: #059669; }
+        /* セッション */
+        .session-list { list-style: none; margin-bottom: 1rem; }
+        .session-item { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.75rem; border-radius: 0.375rem; margin-bottom: 0.375rem; background: #f0fdf4; border: 1px solid #bbf7d0; font-size: 0.9rem; }
+        .session-current { background: #fef2f2; border-color: #fca5a5; }
+        /* モーダル */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 200; display: flex; align-items: flex-start; justify-content: center; padding: 1rem; overflow-y: auto; }
+        .modal { background: white; border-radius: 0.75rem; padding: 1.5rem; max-width: 680px; width: 100%; margin: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .modal-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; padding-bottom: 0.75rem; border-bottom: 2px solid #e5e7eb; }
+        /* 点検結果サマリー */
+        .check-summary { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.875rem; }
+        .check-ok  { color: #059669; }
+        .check-ng  { color: #dc2626; }
+        @media (max-width: 768px) {
+            .title  { font-size: 1.25rem; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .check-table .col-check { display: none; }
+            .modal  { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ─── 設定 ────────────────────────────────────────────────────────────────────
+const TEST_MODE = false;
+const GAS_URL   = 'https://script.google.com/macros/s/AKfycbxa_76m-X3BHLXtZoXOmsYmargBE5cB-g0Q9CA_TEg1pRvlNxOLq_IHFCqVrSPf6ayV/exec';
+
+// テストモード用ダミーデータ
+const DUMMY_LOCATION       = '北緯34.396560, 東経132.459560';
+const DUMMY_WEATHER        = '晴れ、北風3.2m/s';
+const DUMMY_FLIGHT_LOCATION = '〇〇公園テストフィールド';
+const DUMMY_NOTES          = 'テスト飛行';
+
+// ─── 点検項目定義（国土交通省 無人航空機飛行日誌 記載要領に準拠）──────────────
+const PREFLIGHT_ITEMS = [
+    { id: 'pf_01', label: '機体全般',         desc: '機器の取り付け状態に異常がないこと' },
+    { id: 'pf_02', label: 'プロペラ',         desc: '外観・損傷・ゆがみがないこと' },
+    { id: 'pf_03', label: 'フレーム',         desc: '外観・損傷・ゆがみがないこと' },
+    { id: 'pf_04', label: '通信系統',         desc: '機体と操縦装置の通信品質が正常であること' },
+    { id: 'pf_05', label: '推進系統',         desc: 'モーターまたは発動機が正常であること' },
+    { id: 'pf_06', label: '電源系統',         desc: '機体および操縦装置電源が正常であること' },
+    { id: 'pf_07', label: '自動制御系統',     desc: '飛行制御装置が正常であること' },
+    { id: 'pf_08', label: '操縦装置',         desc: '外観・スティック・スイッチに異常がないこと' },
+    { id: 'pf_09', label: 'バッテリー・燃料', desc: '充電状況・残燃料表示機能が正常であること' },
+    { id: 'pf_10', label: '飛行エリアの安全確認', desc: '障害物・第三者の立入りがないこと' },
+    { id: 'pf_11', label: '気象条件',         desc: '飛行に適した気象条件であること' },
+];
+
+const POSTFLIGHT_ITEMS = [
+    { id: 'po_01', label: '機体全般',         desc: '機器の取り付け状態・外観・損傷がないこと' },
+    { id: 'po_02', label: 'プロペラ',         desc: '損傷・変形がないこと' },
+    { id: 'po_03', label: 'フレーム',         desc: '外観・損傷・ゆがみがないこと' },
+    { id: 'po_04', label: '通信系統',         desc: '機体と操縦装置の通信に異常がないこと' },
+    { id: 'po_05', label: '推進系統',         desc: 'モーター等に損傷・異常発熱がないこと' },
+    { id: 'po_06', label: '電源系統',         desc: 'バッテリーに膨張・損傷・異常発熱がないこと' },
+    { id: 'po_07', label: '自動制御系統',     desc: '飛行制御装置に異常がないこと' },
+    { id: 'po_08', label: '操縦装置',         desc: '損傷がなく電源がOFFであること' },
+    { id: 'po_09', label: 'データ・映像',     desc: 'フライトログ・映像が正常に記録されていること' },
+];
+
+// ─── 状態管理 ─────────────────────────────────────────────────────────────────
+let state = {
+    activeTab: 'flight',
+    flightLogs: [], maintenanceLogs: [], drones: [], pilots: [],
+    flightPurposes: ['空撮', '測量', '点検', '農薬散布', '配送', '訓練', '趣味'],
+    showMaintenanceForm: false, showDroneForm: false, showPilotForm: false,
+    searchTerm: '', maintenanceChecked: true, loading: false, error: null,
+
+    // 飛行記録
+    isRecording:        false,
+    waitingForResume:   false,  // バッテリー交換後・再開待ち状態
+    currentFlight:      null,   // { droneId, pilotId, purpose, weather, date, preflightChecks }
+    sessions:           [],     // 完了済みセッション [{num, takeoffTime, landingTime, elapsedSeconds, takeoffCoords, landingCoords}]
+    currentSessionNum:  0,
+    currentSessionSecs: 0,
+    timerInterval:      null,
+
+    // 飛行後点検モーダル
+    showPostFlightModal: false,
+    postFlightChecks:   {},     // id -> bool (true=正常)
+
+    // 編集モーダル
+    showEditModal: false,
+    editingLog:   null,
+
+    // 機体編集モーダル
+    showDroneEditModal: false,
+    editingDrone:       null,
+
+    // 操縦者編集モーダル
+    showPilotEditModal: false,
+    editingPilot:       null,
+
+    // 整備記録編集モーダル
+    showMaintenanceEditModal: false,
+    editingMaintenance:       null,
+};
+
+// ─── ダミーデータ ─────────────────────────────────────────────────────────────
+function dummyLocation()  { return DUMMY_LOCATION + ' (テスト)'; }
+function dummyWeather()   { return DUMMY_WEATHER + ' (テスト)'; }
+
+// ─── GAS / ローカルストレージ ──────────────────────────────────────────────────
+async function callGAS(action, data) {
+    if (TEST_MODE) return handleLocalStorage(action, data);
+    if (GAS_URL === 'YOUR_GAS_WEB_APP_URL_HERE') { alert('GASのURLを設定してください'); throw new Error('GAS URL not configured'); }
+    try {
+        const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, data }) });
+        const result = await res.json();
+        if (result.error) throw new Error(result.error);
+        return result;
+    } catch (e) { console.error('GAS API Error:', e); throw e; }
+}
+
+function handleLocalStorage(action, data) {
+    const drones = JSON.parse(localStorage.getItem('drones') || '[]');
+    const pilots = JSON.parse(localStorage.getItem('pilots') || '[]');
+    const flightLogs = JSON.parse(localStorage.getItem('flightLogs') || '[]');
+    const maintenanceLogs = JSON.parse(localStorage.getItem('maintenanceLogs') || '[]');
+    const flightPurposes = JSON.parse(localStorage.getItem('flightPurposes') || '["空撮","測量","点検","農薬散布","配送","訓練","趣味"]');
+
+    switch(action) {
+        case 'getDrones': return drones;
+        case 'addDrone': {
+            const n = { ...data, id: Date.now().toString() };
+            drones.push(n); localStorage.setItem('drones', JSON.stringify(drones));
+            return { success: true, id: n.id };
+        }
+        case 'updateDrone': {
+            const idx = drones.findIndex(d => d.id === data.id);
+            if (idx >= 0) { drones[idx] = { ...drones[idx], ...data }; localStorage.setItem('drones', JSON.stringify(drones)); }
+            return { success: true };
+        }
+        case 'getPilots': return pilots;
+        case 'addPilot': {
+            const n = { ...data, id: Date.now().toString() };
+            pilots.push(n); localStorage.setItem('pilots', JSON.stringify(pilots));
+            return { success: true, id: n.id };
+        }
+        case 'getFlightLogs': return [...flightLogs].reverse();
+        case 'addFlightLog': {
+            const n = { ...data, id: Date.now().toString(), createdAt: new Date().toISOString() };
+            flightLogs.push(n); localStorage.setItem('flightLogs', JSON.stringify(flightLogs));
+            return { success: true, id: n.id };
+        }
+        case 'updateFlightLog': {
+            const idx = flightLogs.findIndex(l => l.id === data.id);
+            if (idx >= 0) { flightLogs[idx] = { ...flightLogs[idx], ...data }; localStorage.setItem('flightLogs', JSON.stringify(flightLogs)); }
+            return { success: true };
+        }
+        case 'getMaintenanceLogs': return [...maintenanceLogs].reverse();
+        case 'addMaintenanceLog': {
+            const n = { ...data, id: Date.now().toString(), createdAt: new Date().toISOString() };
+            maintenanceLogs.push(n); localStorage.setItem('maintenanceLogs', JSON.stringify(maintenanceLogs));
+            return { success: true, id: n.id };
+        }
+        case 'getAllData':
+            return { drones, pilots, flightLogs: [...flightLogs].reverse(), maintenanceLogs: [...maintenanceLogs].reverse(), flightPurposes };
+        case 'addFlightPurpose':
+            if (!flightPurposes.includes(data)) { flightPurposes.push(data); localStorage.setItem('flightPurposes', JSON.stringify(flightPurposes)); }
+            return { success: true };
+        case 'updatePilot': {
+            const idx = pilots.findIndex(p => p.id === data.id);
+            if (idx >= 0) { pilots[idx] = { ...pilots[idx], ...data }; localStorage.setItem('pilots', JSON.stringify(pilots)); }
+            return { success: true };
+        }
+        case 'updateMaintenanceLog': {
+            const idx = maintenanceLogs.findIndex(l => l.id === data.id);
+            if (idx >= 0) { maintenanceLogs[idx] = { ...maintenanceLogs[idx], ...data }; localStorage.setItem('maintenanceLogs', JSON.stringify(maintenanceLogs)); }
+            return { success: true };
+        }
+        case 'deleteFlightLog': {
+            const filtered = flightLogs.filter(l => l.id !== data.id);
+            localStorage.setItem('flightLogs', JSON.stringify(filtered));
+            return { success: true };
+        }
+        case 'deleteMaintenanceLog': {
+            const filtered = maintenanceLogs.filter(l => l.id !== data.id);
+            localStorage.setItem('maintenanceLogs', JSON.stringify(filtered));
+            return { success: true };
+        }
+        default: throw new Error('Invalid action');
+    }
+}
+
+// ─── データ読み込み ────────────────────────────────────────────────────────────
+async function loadData() {
+    state.loading = true; state.error = null; render();
+    try {
+        const data = await callGAS('getAllData');
+        state.drones = data.drones || []; state.pilots = data.pilots || [];
+        state.flightLogs = data.flightLogs || []; state.maintenanceLogs = data.maintenanceLogs || [];
+
+        if (TEST_MODE && state.drones.length === 0 && state.pilots.length === 0) {
+            await callGAS('addDrone', { manufacturer: 'DJI', model: 'Mavic 3', serialNumber: '1234567890ABC', registrationNumber: 'JU-12345', weight: '895', purchaseDate: '2024-01-15' });
+            await callGAS('addPilot', { name: '山田太郎', licenseType: '二等無人航空機操縦士', licenseNumber: '2A-1234-5678', issueDate: '2023-06-01', expiryDate: '2026-05-31', birthDate: '1990-04-01', address: '広島県広島市中区', phone: '090-1234-5678', email: 'yamada@example.com', notes: 'テストユーザー', limitations: { aircraftType: ['マルチローター'], visualOnly: false, daytimeOnly: false, under25kg: true } });
+            const upd = await callGAS('getAllData');
+            state.drones = upd.drones || []; state.pilots = upd.pilots || [];
+        }
+
+        if (TEST_MODE) {
+            const saved = localStorage.getItem('flightPurposes');
+            if (saved) {
+                const custom = JSON.parse(saved);
+                const defaults = ['空撮','測量','点検','農薬散布','配送','訓練','趣味'];
+                state.flightPurposes = defaults.concat(custom.filter(p => !defaults.includes(p)));
+            }
+        } else if (data.flightPurposes) { state.flightPurposes = data.flightPurposes; }
+
+    } catch(e) { state.error = 'データの読み込みに失敗しました: ' + e.message; }
+    finally { state.loading = false; render(); }
+}
+
+// ─── キャッシュクリア ─────────────────────────────────────────────────────────
+function clearCache() {
+    if (!confirm('すべてのデータを削除しますか？')) return;
+    localStorage.clear();
+    Object.assign(state, { drones: [], pilots: [], flightLogs: [], maintenanceLogs: [],
+        flightPurposes: ['空撮','測量','点検','農薬散布','配送','訓練','趣味'],
+        isRecording: false, waitingForResume: false, currentFlight: null, sessions: [],
+        currentSessionNum: 0, currentSessionSecs: 0,
+        showPostFlightModal: false, showEditModal: false, editingLog: null,
+        showDroneEditModal: false, editingDrone: null,
+        showPilotEditModal: false, editingPilot: null,
+        showMaintenanceEditModal: false, editingMaintenance: null });
+    if (state.timerInterval) { clearInterval(state.timerInterval); state.timerInterval = null; }
+    render();
+}
+
+// ─── GPS ────────────────────────────────────────────────────────────────────
+async function getCurrentCoordinates() {
+    if (TEST_MODE) return dummyLocation();
+    try {
+        const pos = await getPosition();
+        return '北緯' + pos.coords.latitude.toFixed(6) + ', 東経' + pos.coords.longitude.toFixed(6);
+    } catch { return '取得失敗（手動入力）'; }
+}
+function getPosition() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) return reject(new Error('位置情報未対応'));
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+    });
+}
+
+// ─── 飛行記録：開始 ───────────────────────────────────────────────────────────
+async function startFlight() {
+    const droneId = document.getElementById('flight-drone-select').value;
+    const pilotId = document.getElementById('flight-pilot-input').value;
+    const purposeSelect = document.getElementById('flight-purpose-select').value;
+    const purposeCustom = document.getElementById('flight-purpose-custom').value;
+    const purpose = purposeSelect === 'その他' ? purposeCustom : purposeSelect;
+    const weather = document.getElementById('flight-weather-input').value;
+    const flightModeItems = [
+        ['fm_01','目視内飛行'],['fm_02','目視外飛行'],['fm_03','夜間飛行'],
+        ['fm_04','人口集中地区（DID）上空'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
+        ['fm_07','危険物輸送'],['fm_08','物件投下'],['fm_09','人又は物件から30m未満'],
+    ];
+    const checkedModes = flightModeItems.filter(([id]) => document.getElementById(id)?.checked).map(([,label]) => label);
+    const otherText = document.getElementById('fm_other_text')?.value.trim();
+    if (otherText) checkedModes.push(otherText);
+    const flightMode = checkedModes.join('、');
+    const takeoffAddress = document.getElementById('flight-takeoff-address').value.trim();
+    const landingAddressInput = document.getElementById('flight-landing-address').value.trim();
+
+    if (!droneId || !pilotId || !purpose || !weather) {
+        alert('機体、操縦者、飛行目的、気象状況を入力してください'); return;
+    }
+    if (purposeSelect === 'その他' && purposeCustom && !state.flightPurposes.includes(purposeCustom)) {
+        state.flightPurposes.push(purposeCustom);
+        if (TEST_MODE) localStorage.setItem('flightPurposes', JSON.stringify(state.flightPurposes));
+        else callGAS('addFlightPurpose', purposeCustom);
+    }
+
+    // 飛行前点検を収集
+    const preflightChecks = {};
+    PREFLIGHT_ITEMS.forEach(item => {
+        const el = document.getElementById(item.id);
+        preflightChecks[item.id] = el ? el.checked : true;
+    });
+    const preflightNotesEl = document.getElementById('preflight-notes');
+    const preflightNotes = preflightNotesEl ? preflightNotesEl.value.trim() : '';
+
+    const allOk = Object.values(preflightChecks).every(v => v);
+    if (!allOk && !confirm('飛行前点検に「正常」未確認の項目があります。このまま飛行を開始しますか？')) return;
+
+    const takeoffCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+    const now = new Date();
+    const startTimeStr = now.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+
+    state.currentFlight = {
+        droneId, pilotId, purpose, flightMode, weather,
+        takeoffAddress,
+        landingAddress: landingAddressInput || takeoffAddress,
+        date: now.toISOString().split('T')[0],
+        preflightChecks,
+        preflightNotes
+    };
+    state.sessions = [];
+    state.currentSessionNum  = 1;
+    state.currentSessionSecs = 0;
+    state._sessionTakeoffTime  = startTimeStr;
+    state._sessionTakeoffCoords = takeoffCoords;
+    state.isRecording      = true;
+    state.waitingForResume = false;
+
+    state.timerInterval = setInterval(() => { state.currentSessionSecs++; updateTimer(); }, 1000);
+    render();
+    scrollToRecording();
+}
+
+// ─── タイマー更新 ─────────────────────────────────────────────────────────────
+function scrollToRecording() {
+    // render() 後に DOM が更新されるので requestAnimationFrame で待つ
+    requestAnimationFrame(() => {
+        const el = document.querySelector('.recording-indicator');
+        if (el) {
+            const top = el.getBoundingClientRect().top + window.scrollY - 80;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+        }
+    });
+}
+function updateTimer() {
+    const el = document.getElementById('flight-timer');
+    if (el) el.textContent = formatSeconds(state.currentSessionSecs);
+    const el2 = document.getElementById('flight-timer-total');
+    if (el2) el2.textContent = formatMinutes(totalFlightSecs());
+}
+function totalFlightSecs() {
+    const completed = state.sessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
+    return completed + (state.waitingForResume ? 0 : state.currentSessionSecs);
+}
+function formatSeconds(secs) {
+    // タイマー表示用 MM:SS
+    const m = Math.floor(secs / 60), s = secs % 60;
+    return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+function formatMinutes(secs) {
+    // バッジ・合計表示用 「X分」or「X時間Y分」
+    if (!secs && secs !== 0) return '-';
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+    if (h > 0) return h + '時間' + m + '分';
+    return m + '分';
+}
+
+// ─── 記録中インライン時刻編集 ─────────────────────────────────────────────────
+function updateSessionTime(idx, field, value) {
+    if (!state.sessions[idx]) return;
+    state.sessions[idx][field] = value;
+    // elapsedSeconds を再計算
+    const to = state.sessions[idx].takeoffTime || '';
+    const la = state.sessions[idx].landingTime  || '';
+    if (to && la) {
+        const [th, tm] = to.split(':').map(Number);
+        const [lh, lm] = la.split(':').map(Number);
+        const secs = Math.max(0, (lh * 60 + lm - (th * 60 + tm)) * 60);
+        state.sessions[idx].elapsedSeconds = secs;
+        const durEl = document.getElementById('live-sess-dur-' + idx);
+        if (durEl) durEl.textContent = formatMinutes(secs);
+    }
+    // 総時間表示を更新
+    const totalEl = document.getElementById('live-total-time');
+    if (totalEl) totalEl.textContent = formatMinutes(
+        state.sessions.reduce((s, sess) => s + (sess.elapsedSeconds || 0), 0)
+    );
+}
+function updateCurrentTakeoff(value) {
+    state._sessionTakeoffTime = value;
+}
+
+// ─── バッテリー交換フェーズ1：現セッション終了、再開待ち ────────────────────
+async function swapBattery() {
+    if (!state.isRecording || state.waitingForResume) return;
+    clearInterval(state.timerInterval); state.timerInterval = null;
+
+    const landingTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const landingCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+
+    // 完了セッションとして記録
+    state.sessions.push({
+        num:            state.currentSessionNum,
+        takeoffTime:    state._sessionTakeoffTime,
+        landingTime,
+        elapsedSeconds: state.currentSessionSecs,
+        takeoffCoords:  state._sessionTakeoffCoords,
+        landingCoords
+    });
+
+    state.waitingForResume = true;
+    render();
+}
+
+// ─── バッテリー交換フェーズ2：次セッション開始 ──────────────────────────────
+async function resumeFlight() {
+    if (!state.isRecording || !state.waitingForResume) return;
+
+    const takeoffTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+    const takeoffCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+
+    state.currentSessionNum++;
+    state.currentSessionSecs       = 0;
+    state._sessionTakeoffTime      = takeoffTime;
+    state._sessionTakeoffCoords    = takeoffCoords;
+    state.waitingForResume         = false;
+
+    state.timerInterval = setInterval(() => { state.currentSessionSecs++; updateTimer(); }, 1000);
+    render();
+    scrollToRecording();
+}
+
+// ─── 飛行終了ボタン → 飛行後点検モーダルを開く ───────────────────────────────
+async function endFlight() {
+    if (!state.isRecording) return;
+
+    // 再開待ち状態（バッテリー交換後）から終了する場合：最後のセッションは既に保存済み
+    if (!state.waitingForResume) {
+        clearInterval(state.timerInterval); state.timerInterval = null;
+
+        const landingTime   = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+        const landingCoords = TEST_MODE ? dummyLocation() : await getCurrentCoordinates();
+
+        state.sessions.push({
+            num:            state.currentSessionNum,
+            takeoffTime:    state._sessionTakeoffTime,
+            landingTime,
+            elapsedSeconds: state.currentSessionSecs,
+            takeoffCoords:  state._sessionTakeoffCoords,
+            landingCoords
+        });
+    }
+
+    // 飛行後点検を全て「正常」で初期化
+    const checks = {};
+    POSTFLIGHT_ITEMS.forEach(item => { checks[item.id] = true; });
+    state.postFlightChecks = checks;
+
+    state.showPostFlightModal = true;
+    render();
+}
+
+// ─── 飛行後点検：保存 ─────────────────────────────────────────────────────────
+async function saveFlightWithPostCheck() {
+    // フォームから収集
+    POSTFLIGHT_ITEMS.forEach(item => {
+        const el = document.getElementById('po_' + item.id);
+        if (el) state.postFlightChecks[item.id] = el.checked;
+    });
+    const postflightNotesEl = document.getElementById('postflight-notes');
+    const postflightNotes = postflightNotesEl ? postflightNotesEl.value.trim() : '';
+    const flightReportEl = document.getElementById('flight-report');
+    const flightReport = flightReportEl ? flightReportEl.value.trim() : '正常';
+    const location = document.getElementById('final-location').value.trim();
+    const notes    = document.getElementById('final-notes').value.trim();
+
+    if (!location) { alert('飛行場所を入力してください'); return; }
+
+    const allSessions = state.sessions;
+    const totalSecs   = allSessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
+
+    const log = {
+        droneId:          state.currentFlight.droneId,
+        pilotId:          state.currentFlight.pilotId,
+        purpose:          state.currentFlight.purpose,
+        flightMode:       state.currentFlight.flightMode || '',
+        weather:          state.currentFlight.weather,
+        date:             state.currentFlight.date,
+        takeoffAddress:   state.currentFlight.takeoffAddress || '',
+        landingAddress:   state.currentFlight.landingAddress || '',
+        preflightChecks:  state.currentFlight.preflightChecks,
+        preflightNotes:   state.currentFlight.preflightNotes || '',
+        postflightChecks: state.postFlightChecks,
+        postflightNotes:  postflightNotes,
+        flightReport:     flightReport,
+        sessions:         allSessions,
+        totalFlightSecs:  totalSecs,
+        startTime:        allSessions[0]?.takeoffTime || '',
+        endTime:          allSessions[allSessions.length - 1]?.landingTime || '',
+        takeoffLocation:  allSessions[0]?.takeoffCoords || '',
+        landingLocation:  allSessions[allSessions.length - 1]?.landingCoords || '',
+        location,
+        notes
+    };
+
+    state.loading = true; render();
+    try {
+        await callGAS('addFlightLog', log);
+
+        if (state.maintenanceChecked) {
+            await callGAS('addMaintenanceLog', {
+                droneId: log.droneId, date: log.date, type: '飛行後点検',
+                technician: getPilotName(log.pilotId),
+                description: '飛行後の定期点検（飛行場所: ' + log.location + '）',
+                maintenanceLocation: log.landingLocation, notes: '飛行記録から自動作成'
+            });
+        }
+
+        await loadData();
+        Object.assign(state, {
+            isRecording: false, waitingForResume: false, currentFlight: null,
+            sessions: [], currentSessionNum: 0, currentSessionSecs: 0,
+            showPostFlightModal: false, postFlightChecks: {}
+        });
+        alert('飛行記録を保存しました');
+    } catch(e) {
+        alert('保存に失敗しました: ' + e.message); state.loading = false;
+    }
+    render();
+}
+
+// ─── 編集モーダル ─────────────────────────────────────────────────────────────
+function openEditModal(logId) {
+    const log = state.flightLogs.find(l => l.id === logId);
+    if (!log) return;
+    state.editingLog = { ...log };
+    state.showEditModal = true;
+    render();
+}
+function closeEditModal() { state.showEditModal = false; state.editingLog = null; render(); }
+async function saveEdit() {
+    const loc     = document.getElementById('edit-location').value.trim();
+    const purpose = document.getElementById('edit-purpose').value.trim();
+    const weather = document.getElementById('edit-weather').value.trim();
+    const notes   = document.getElementById('edit-notes').value.trim();
+    if (!loc) { alert('飛行場所は必須です'); return; }
+
+    // セッション時間を読み取り・再計算
+    const baseSessions = (state.editingLog.sessions && state.editingLog.sessions.length > 0)
+        ? state.editingLog.sessions
+        : [{ num: 1 }];
+
+    const updatedSessions = baseSessions.map((s, i) => {
+        const takeoffVal = (document.getElementById('sess_' + i + '_takeoff')?.value || '').trim();
+        const landingVal = (document.getElementById('sess_' + i + '_landing')?.value || '').trim();
+        let secs = s.elapsedSeconds || 0;
+        if (takeoffVal && landingVal) {
+            const [th, tm] = takeoffVal.split(':').map(Number);
+            const [lh, lm] = landingVal.split(':').map(Number);
+            secs = Math.max(0, (lh * 60 + lm - (th * 60 + tm)) * 60);
+        }
+        return { ...s, takeoffTime: takeoffVal, landingTime: landingVal, elapsedSeconds: secs };
+    });
+
+    const totalSecs = updatedSessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
+
+    const updated = {
+        ...state.editingLog,
+        location: loc, purpose, weather, notes,
+        sessions:        updatedSessions,
+        totalFlightSecs: totalSecs,
+        startTime:       updatedSessions[0]?.takeoffTime || state.editingLog.startTime || '',
+        endTime:         updatedSessions[updatedSessions.length - 1]?.landingTime || state.editingLog.endTime || '',
+    };
+
+    state.loading = true; render();
+    try {
+        await callGAS('updateFlightLog', updated);
+        await loadData();
+        state.showEditModal = false; state.editingLog = null;
+    } catch(e) {
+        alert('更新に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+
+// ─── 機体編集モーダル ─────────────────────────────────────────────────────────
+function openDroneEditModal(droneId) {
+    const drone = state.drones.find(d => d.id === droneId);
+    if (!drone) return;
+    state.editingDrone = { ...drone };
+    state.showDroneEditModal = true;
+    render();
+}
+function closeDroneEditModal() { state.showDroneEditModal = false; state.editingDrone = null; render(); }
+async function saveDroneEdit() {
+    const d = state.editingDrone;
+    const updated = {
+        ...d,
+        manufacturer:        document.getElementById('de-mfg').value.trim(),
+        model:               document.getElementById('de-model').value.trim(),
+        serialNumber:        document.getElementById('de-serial').value.trim(),
+        registrationNumber:  document.getElementById('de-reg').value.trim(),
+        weight:              document.getElementById('de-weight').value.trim(),
+        purchaseDate:        document.getElementById('de-purchase').value,
+        appRegisteredDate:   document.getElementById('de-app-reg-date').value,
+        preRegistrationMins: parseInt(document.getElementById('de-pre-mins').value || '0', 10) || 0,
+    };
+    if (!updated.manufacturer || !updated.model || !updated.serialNumber || !updated.weight) {
+        alert('メーカー・機種・製造番号・重量は必須です'); return;
+    }
+    state.loading = true; render();
+    try {
+        await callGAS('updateDrone', updated);
+        await loadData();
+        state.showDroneEditModal = false; state.editingDrone = null;
+    } catch(e) {
+        alert('更新に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+
+// ─── 操縦者編集モーダル ────────────────────────────────────────────────────────
+function openPilotEditModal(pilotId) {
+    const pilot = state.pilots.find(p => p.id === pilotId);
+    if (!pilot) return;
+    state.editingPilot = { ...pilot };
+    state.showPilotEditModal = true;
+    render();
+}
+function closePilotEditModal() { state.showPilotEditModal = false; state.editingPilot = null; render(); }
+async function savePilotEdit() {
+    const p = state.editingPilot;
+    const updated = {
+        ...p,
+        name:          document.getElementById('pe-name').value.trim(),
+        licenseType:   document.getElementById('pe-license-type').value,
+        licenseNumber: document.getElementById('pe-license-number').value.trim(),
+        issueDate:     document.getElementById('pe-issue-date').value,
+        expiryDate:    document.getElementById('pe-expiry-date').value,
+        birthDate:     document.getElementById('pe-birth').value,
+        address:       document.getElementById('pe-address').value.trim(),
+        phone:         document.getElementById('pe-phone').value.trim(),
+        email:         document.getElementById('pe-email').value.trim(),
+        notes:         document.getElementById('pe-notes').value.trim(),
+        limitations: {
+            aircraftType: Array.from(document.querySelectorAll('input[name="pe-aircraft-type"]:checked')).map(cb => cb.value),
+            visualOnly:   document.getElementById('pe-limit-visual').checked,
+            daytimeOnly:  document.getElementById('pe-limit-daytime').checked,
+            under25kg:    document.getElementById('pe-limit-25kg').checked
+        }
+    };
+    if (!updated.name || !updated.licenseType || !updated.birthDate) {
+        alert('氏名、技能証明種類、生年月日は必須です'); return;
+    }
+    state.loading = true; render();
+    try {
+        await callGAS('updatePilot', updated);
+        await loadData();
+        state.showPilotEditModal = false; state.editingPilot = null;
+    } catch(e) {
+        alert('更新に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+
+// ─── 整備記録編集モーダル ──────────────────────────────────────────────────────
+function openMaintenanceEditModal(logId) {
+    const log = state.maintenanceLogs.find(l => l.id === logId);
+    if (!log) return;
+    state.editingMaintenance = { ...log };
+    state.showMaintenanceEditModal = true;
+    render();
+}
+function closeMaintenanceEditModal() { state.showMaintenanceEditModal = false; state.editingMaintenance = null; render(); }
+async function saveMaintenanceEdit() {
+    const m = state.editingMaintenance;
+    const updated = {
+        ...m,
+        droneId:             document.getElementById('me-drone').value,
+        date:                document.getElementById('me-date').value,
+        type:                document.getElementById('me-type').value,
+        technician:          document.getElementById('me-tech').value.trim(),
+        maintenanceLocation: document.getElementById('me-location').value.trim(),
+        nextDate:            document.getElementById('me-next').value,
+        description:         document.getElementById('me-desc').value.trim(),
+        notes:               document.getElementById('me-notes').value.trim(),
+    };
+    if (!updated.droneId || !updated.date || !updated.type || !updated.technician || !updated.description || !updated.maintenanceLocation) {
+        alert('必須項目を入力してください'); return;
+    }
+    state.loading = true; render();
+    try {
+        await callGAS('updateMaintenanceLog', updated);
+        await loadData();
+        state.showMaintenanceEditModal = false; state.editingMaintenance = null;
+    } catch(e) {
+        alert('更新に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+
+// ─── 削除 ─────────────────────────────────────────────────────────────────────
+async function deleteFlightLog(logId) {
+    if (!confirm('この飛行記録を削除しますか？この操作は取り消せません。')) return;
+    state.loading = true; render();
+    try {
+        await callGAS('deleteFlightLog', { id: logId });
+        await loadData();
+    } catch(e) {
+        alert('削除に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+async function deleteMaintenanceLog(logId) {
+    if (!confirm('この整備記録を削除しますか？この操作は取り消せません。')) return;
+    state.loading = true; render();
+    try {
+        await callGAS('deleteMaintenanceLog', { id: logId });
+        await loadData();
+    } catch(e) {
+        alert('削除に失敗しました: ' + e.message); state.loading = false; render();
+    }
+}
+
+// ─── 整備・機体・操縦者 ───────────────────────────────────────────────────────
+async function addPilot(pilot) {
+    state.loading = true; render();
+    try { await callGAS('addPilot', pilot); await loadData(); state.showPilotForm = false; }
+    catch(e) { alert('操縦者の追加に失敗: ' + e.message); state.loading = false; render(); }
+}
+async function addDrone(drone) {
+    state.loading = true; render();
+    try { await callGAS('addDrone', drone); await loadData(); state.showDroneForm = false; }
+    catch(e) { alert('機体の追加に失敗: ' + e.message); state.loading = false; render(); }
+}
+async function addMaintenanceLog(log) {
+    state.loading = true; render();
+    try { await callGAS('addMaintenanceLog', log); await loadData(); state.showMaintenanceForm = false; }
+    catch(e) { alert('整備記録の追加に失敗: ' + e.message); state.loading = false; render(); }
+}
+
+// ─── 機体ごとの前回選択を自動入力 ────────────────────────────────────────────
+function getLastFlightForDrone(droneId) {
+    // flightLogs は新しい順なので先頭が最新
+    return state.flightLogs.find(l => l.droneId === droneId) || null;
+}
+
+function onDroneSelect(droneId) {
+    if (!droneId) return;
+    const last = getLastFlightForDrone(droneId);
+    if (!last) return;
+
+    // 操縦者
+    const pilotSel = document.getElementById('flight-pilot-input');
+    if (pilotSel && last.pilotId) pilotSel.value = last.pilotId;
+
+    // 飛行目的
+    const purposeSel = document.getElementById('flight-purpose-select');
+    const purposeCustom = document.getElementById('flight-purpose-custom');
+    if (purposeSel && last.purpose) {
+        const opt = Array.from(purposeSel.options).find(o => o.value === last.purpose);
+        if (opt) {
+            purposeSel.value = last.purpose;
+        } else {
+            // リストにない値（カスタム）
+            purposeSel.value = 'その他';
+            if (purposeCustom) { purposeCustom.style.display = 'block'; purposeCustom.value = last.purpose; }
+        }
+    }
+
+    // 前回ヒント表示
+    const hint = document.getElementById('drone-autofill-hint');
+    if (hint) {
+        hint.textContent = '✔ ' + last.date + ' の記録から自動入力しました';
+        hint.style.display = 'block';
+    }
+}
+
+// ─── ユーティリティ ───────────────────────────────────────────────────────────
+function filterLogs(logs) {
+    if (!state.searchTerm) return logs;
+    return logs.filter(l => JSON.stringify(l).toLowerCase().includes(state.searchTerm.toLowerCase()));
+}
+function getPilotName(id) { const p = state.pilots.find(p => p.id === id); return p ? p.name : '不明'; }
+function getDroneName(id) { const d = state.drones.find(d => d.id === id); return d ? d.manufacturer + ' ' + d.model : '不明'; }
+function calcFlightTime(secs) { return formatMinutes(secs); }
+function secsFromStartEnd(start, end) {
+    if (!start || !end) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    return ((eh * 60 + em) - (sh * 60 + sm)) * 60;
+}
+function checkSummary(checks, items) {
+    if (!checks) return '';
+    const total = items.length;
+    const ok = items.filter(item => checks[item.id] !== false).length;
+    const allOk = ok === total;
+    return '<span class="check-summary ' + (allOk ? 'check-ok' : 'check-ng') + '">' +
+        (allOk ? '✓ すべて正常' : '⚠ 一部要確認') + ' (' + ok + '/' + total + ')</span>';
+}
+
+// ─── 出力 ────────────────────────────────────────────────────────────────────
+function exportData() {
+    const blob = new Blob([JSON.stringify({ drones: state.drones, flightLogs: state.flightLogs, maintenanceLogs: state.maintenanceLogs, exportDate: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = 'drone-logs-' + new Date().toISOString().split('T')[0] + '.json'; a.click();
+}
+async function exportPDF() {
+    const jsPDF = window.jspdf.jsPDF; const doc = new jsPDF(); let y = 20;
+    const line = (txt, x=20, sz=10) => { doc.setFontSize(sz); if(y>270){doc.addPage();y=20;} doc.text(txt,x,y); y+=sz*0.6; };
+    line('無人航空機 飛行日誌・整備記録', 20, 16); y+=4;
+    line('出力日: ' + new Date().toLocaleDateString('ja-JP'));  y+=8;
+    line('【機体一覧】', 20, 13); y+=2;
+    state.drones.forEach(d => { line('  ' + d.manufacturer + ' ' + d.model + '  S/N: ' + d.serialNumber); });
+    y+=6; line('【飛行記録】(' + state.flightLogs.length + '件)', 20, 13); y+=2;
+    state.flightLogs.slice(0,50).forEach(l => {
+        const secs = l.totalFlightSecs || secsFromStartEnd(l.startTime, l.endTime);
+        line('  ' + l.date + '  ' + getDroneName(l.droneId) + '  ' + l.location);
+        line('  操縦者: ' + getPilotName(l.pilotId) + '  目的: ' + l.purpose + '  実飛行: ' + calcFlightTime(secs));
+    });
+    doc.save('drone-records-' + new Date().toISOString().split('T')[0] + '.pdf');
+}
+
+// ─── フォーム送信ヘルパー ────────────────────────────────────────────────────
+function submitPilot() {
+    const pilot = {
+        name: document.getElementById('pilot-name').value,
+        licenseType: document.getElementById('pilot-license-type').value,
+        licenseNumber: document.getElementById('pilot-license-number').value,
+        issueDate: document.getElementById('pilot-issue-date').value,
+        expiryDate: document.getElementById('pilot-expiry-date').value,
+        birthDate: document.getElementById('pilot-birth').value,
+        address: document.getElementById('pilot-address').value,
+        phone: document.getElementById('pilot-phone').value,
+        email: document.getElementById('pilot-email').value,
+        notes: document.getElementById('pilot-notes').value,
+        limitations: {
+            aircraftType: Array.from(document.querySelectorAll('input[name="aircraft-type"]:checked')).map(cb => cb.value),
+            visualOnly: document.getElementById('limit-visual').checked,
+            daytimeOnly: document.getElementById('limit-daytime').checked,
+            under25kg: document.getElementById('limit-25kg').checked
+        }
+    };
+    if (!pilot.name || !pilot.licenseType || !pilot.birthDate) { alert('氏名、技能証明種類、生年月日は必須です'); return; }
+    addPilot(pilot);
+}
+function submitMaintenanceLog() {
+    const log = {
+        droneId: document.getElementById('maint-drone').value,
+        date: document.getElementById('maint-date').value,
+        type: document.getElementById('maint-type').value,
+        technician: document.getElementById('maint-tech').value,
+        description: document.getElementById('maint-desc').value,
+        maintenanceLocation: document.getElementById('maint-location').value,
+        nextDate: document.getElementById('maint-next').value,
+        notes: document.getElementById('maint-notes').value
+    };
+    if (!log.droneId || !log.date || !log.type || !log.technician || !log.description || !log.maintenanceLocation) {
+        alert('必須項目を入力してください'); return;
+    }
+    addMaintenanceLog(log);
+}
+function submitDrone() {
+    const drone = {
+        manufacturer:        document.getElementById('drone-mfg').value,
+        model:               document.getElementById('drone-model').value,
+        serialNumber:        document.getElementById('drone-serial').value,
+        registrationNumber:  document.getElementById('drone-reg').value,
+        weight:              document.getElementById('drone-weight').value,
+        purchaseDate:        document.getElementById('drone-purchase').value,
+        appRegisteredDate:   document.getElementById('drone-app-reg-date').value,
+        preRegistrationMins: parseInt(document.getElementById('drone-pre-mins').value || '0', 10) || 0,
+    };
+    if (!drone.manufacturer || !drone.model || !drone.serialNumber || !drone.weight || !drone.purchaseDate) {
+        alert('必須項目を入力してください'); return;
+    }
+    addDrone(drone);
+}
+
+// ─── メインレンダリング ───────────────────────────────────────────────────────
+function render() {
+    let html = '<div class="header"><div class="container header-content">';
+    html += '<h1 class="title">無人航空機 飛行日誌・整備記録</h1>';
+    html += '<div class="flex gap-2" style="align-items:center;">';
+    if (TEST_MODE) {
+        html += '<div class="test-mode-banner">🧪 テストモード</div>';
+        html += '<button onclick="clearCache()" class="btn btn-danger btn-small">🗑 リセット</button>';
+    }
+    html += '<button onclick="exportPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>PDF出力</button>';
+    html += '<button onclick="exportData()" class="btn btn-dark"' + (state.loading ? ' disabled' : '') + '>JSON出力</button>';
+    html += '</div></div></div>';
+    html += '<div class="container" style="padding-top:1rem;">';
+    if (state.error) html += '<div class="error">' + state.error + '</div>';
+    if (state.loading) html += '<div class="loading">読み込み中...</div>';
+
+    html += '<div class="tabs">';
+    ['flight:飛行日誌','maintenance:整備記録','drones:機体管理','pilots:操縦者管理'].forEach(t => {
+        const [key, label] = t.split(':');
+        html += '<button onclick="state.activeTab=\'' + key + '\';window.scrollTo({top:0,behavior:\'instant\'});render();" class="tab ' + (state.activeTab===key?'tab-active':'tab-inactive') + '">' + label + '</button>';
+    });
+    html += '</div>';
+    html += '<div class="search-box"><input type="text" placeholder="検索..." value="' + state.searchTerm + '" oninput="state.searchTerm=this.value;render();" class="search-input" /></div>';
+
+    if (!state.loading) {
+        if (state.activeTab === 'flight')       html += renderFlightTab();
+        else if (state.activeTab === 'maintenance') html += renderMaintenanceTab();
+        else if (state.activeTab === 'drones')  html += renderDronesTab();
+        else if (state.activeTab === 'pilots')  html += renderPilotsTab();
+    }
+    html += '</div>';
+
+    // モーダル
+    if (state.showPostFlightModal)       html += renderPostFlightModal();
+    if (state.showEditModal)             html += renderEditModal();
+    if (state.showDroneEditModal)        html += renderDroneEditModal();
+    if (state.showPilotEditModal)        html += renderPilotEditModal();
+    if (state.showMaintenanceEditModal)  html += renderMaintenanceEditModal();
+
+    document.getElementById('app').innerHTML = html;
+}
+
+// ─── 飛行タブ ─────────────────────────────────────────────────────────────────
+function renderFlightTab() {
+    const logs = filterLogs(state.flightLogs);
+    let html = '<div class="flight-control">';
+
+    if (state.isRecording) {
+        // ── 記録中 UI ──────────────────────────────────
+        html += '<div class="recording-indicator">';
+        html += '<h3 style="font-size:1.2rem;font-weight:700;color:#dc2626;margin-bottom:0.5rem;">'
+              + (state.waitingForResume ? '🔋 バッテリー交換中' : '🔴 飛行記録中') + '</h3>';
+        html += '<p class="text-sm">機体: ' + getDroneName(state.currentFlight.droneId) + ' ／ 操縦者: ' + getPilotName(state.currentFlight.pilotId) + '</p>';
+        html += '</div>';
+
+        // 完了済みセッション一覧（インライン編集）
+        if (state.sessions.length > 0) {
+            html += '<div style="margin-bottom:1rem;">';
+            html += '<p class="font-medium text-sm" style="margin-bottom:0.5rem;color:#374151;">記録済みセッション</p>';
+            state.sessions.forEach((s, i) => {
+                const to = toTimeInput(s.takeoffTime || '');
+                const la = toTimeInput(s.landingTime  || '');
+                html += '<div style="display:grid;grid-template-columns:auto 1fr 1fr auto;gap:0.5rem;align-items:center;'
+                      + 'background:#f0fdf4;border:1px solid #bbf7d0;border-radius:0.375rem;padding:0.5rem 0.75rem;margin-bottom:0.375rem;">';
+                html += '<span class="text-sm font-medium" style="white-space:nowrap;">✅ S' + s.num + '</span>';
+                html += '<div><span style="font-size:0.7rem;color:#6b7280;display:block;">離陸</span>'
+                      + '<input type="time" value="' + to + '" class="input" style="padding:0.25rem 0.5rem;font-size:0.9rem;" '
+                      + 'onchange="updateSessionTime(' + i + ',\'takeoffTime\',this.value)" /></div>';
+                html += '<div><span style="font-size:0.7rem;color:#6b7280;display:block;">着陸</span>'
+                      + '<input type="time" value="' + la + '" class="input" style="padding:0.25rem 0.5rem;font-size:0.9rem;" '
+                      + 'onchange="updateSessionTime(' + i + ',\'landingTime\',this.value)" /></div>';
+                html += '<span id="live-sess-dur-' + i + '" class="badge badge-green" style="white-space:nowrap;">'
+                      + formatMinutes(s.elapsedSeconds) + '</span>';
+                html += '</div>';
+            });
+            html += '<div style="text-align:right;font-size:0.9rem;color:#374151;margin-top:0.25rem;">'
+                  + '合計: <strong id="live-total-time">'
+                  + formatMinutes(state.sessions.reduce((s, sess) => s + sess.elapsedSeconds, 0))
+                  + '</strong></div>';
+            html += '</div>';
+        }
+
+        if (state.waitingForResume) {
+            // ── 再開待ち状態 ──────────────────────────
+            html += '<p style="color:#d97706;font-weight:600;margin-bottom:0.5rem;">⏸ セッション ' + state.currentSessionNum + ' 終了 — バッテリー交換してください</p>';
+            html += '<p class="text-sm text-gray" style="margin-bottom:1.25rem;">準備ができたら「飛行再開」を押してセッション ' + (state.currentSessionNum + 1) + ' を開始</p>';
+            html += '<div class="flex gap-2" style="justify-content:center;margin-bottom:1.5rem;">';
+            html += '<button onclick="resumeFlight()" class="btn btn-start" style="font-size:1.1rem;padding:0.85rem 2rem;">▶ 飛行再開</button>';
+            html += '<button onclick="endFlight()" class="btn btn-stop" style="font-size:1.1rem;padding:0.85rem 1.5rem;">⏹ 飛行終了</button>';
+            html += '</div>';
+        } else {
+            // ── 飛行中 ───────────────────────────────
+            html += '<div style="display:inline-flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">';
+            html += '<span style="font-size:0.85rem;color:#6b7280;">セッション ' + state.currentSessionNum + '　離陸</span>';
+            html += '<input type="time" value="' + toTimeInput(state._sessionTakeoffTime) + '" '
+                  + 'class="input" style="padding:0.25rem 0.5rem;font-size:0.9rem;width:auto;" '
+                  + 'onchange="updateCurrentTakeoff(this.value)" />';
+            html += '</div>';
+            html += '<div class="timer" id="flight-timer">00:00</div>';
+            if (state.sessions.length > 0) {
+                html += '<p class="timer-total">総実飛行時間: <strong id="flight-timer-total">'
+                      + formatMinutes(totalFlightSecs()) + '</strong></p>';
+            }
+            html += '<div class="flex gap-2" style="justify-content:center;margin-bottom:1.5rem;">';
+            html += '<button onclick="swapBattery()" class="btn btn-warning" style="font-size:1.1rem;padding:0.85rem 1.5rem;">🔋 バッテリー交換</button>';
+            html += '<button onclick="endFlight()" class="btn btn-stop">⏹ 飛行終了</button>';
+            html += '</div>';
+        }
+
+    } else {
+        // ── 飛行開始フォーム ──────────────────────────
+        html += '<h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;">新しい飛行を記録</h3>';
+        html += '<div class="grid grid-2" style="max-width:800px;margin:0 auto 1.5rem;">';
+        html += '<div class="form-group"><label class="label">機体</label><select id="flight-drone-select" class="select" onchange="onDroneSelect(this.value)"><option value="">選択してください</option>';
+        state.drones.forEach(d => { html += '<option value="' + d.id + '">' + d.manufacturer + ' ' + d.model + '</option>'; });
+        html += '</select></div>';
+        html += '<div class="form-group"><label class="label">操縦者</label><select id="flight-pilot-input" class="select"><option value="">選択してください</option>';
+        state.pilots.forEach(p => { html += '<option value="' + p.id + '">' + p.name + '</option>'; });
+        html += '</select></div>';
+        html += '<div class="form-group"><label class="label">飛行目的</label>';
+        html += '<select id="flight-purpose-select" class="select" onchange="document.getElementById(\'flight-purpose-custom\').style.display=this.value===\'その他\'?\'block\':\'none\';">';
+        html += '<option value="">選択してください</option>';
+        state.flightPurposes.forEach(p => { html += '<option>' + p + '</option>'; });
+        html += '<option value="その他">その他（新規入力）</option>';
+        html += '</select><input type="text" id="flight-purpose-custom" class="input" placeholder="飛行目的を入力" style="display:none;margin-top:0.5rem;" /></div>';
+        const weatherVal = TEST_MODE ? dummyWeather() : '';
+        html += '<div class="form-group"><label class="label">気象状況' + (TEST_MODE ? ' <span class="badge badge-orange">テスト値</span>' : '') + '</label>';
+        html += '<input type="text" id="flight-weather-input" class="input" value="' + weatherVal + '" placeholder="' + (TEST_MODE?'':'自動取得中...') + '" /></div>';
+        // 離陸・着陸場所（住所）
+        html += '<div class="form-group"><label class="label">離陸場所（住所）</label>';
+        html += '<input type="text" id="flight-takeoff-address" class="input" placeholder="例: 広島県福山市水呑町 ○○公園" /></div>';
+        html += '<div class="form-group"><label class="label">着陸場所（住所）</label>';
+        html += '<input type="text" id="flight-landing-address" class="input" placeholder="離陸場所と同じ場合は空欄可" /></div>';
+        html += '</div>';
+        // 飛行形態（チェックボックス）
+        html += '<div style="border:2px solid #e5e7eb;border-radius:0.5rem;padding:1.25rem;margin-bottom:1.5rem;">';
+        html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態</p>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;">';
+        [
+            ['fm_01', '目視内飛行'],
+            ['fm_02', '目視外飛行'],
+            ['fm_03', '夜間飛行'],
+            ['fm_04', '人口集中地区（DID）上空'],
+            ['fm_05', '高度150m以上'],
+            ['fm_06', '催し場所上空'],
+            ['fm_07', '危険物輸送'],
+            ['fm_08', '物件投下'],
+            ['fm_09', '人又は物件から30m未満'],
+        ].forEach(([id, label]) => {
+            html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
+                  + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
+        });
+        html += '</div>';
+        html += '<div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.5rem;">';
+        html += '<label style="white-space:nowrap;font-size:0.9rem;color:#374151;">その他:</label>';
+        html += '<input type="text" id="fm_other_text" class="input" style="flex:1;" placeholder="自由記入" />';
+        html += '</div></div>';
+        html += '<p id="drone-autofill-hint" style="display:none;font-size:0.8rem;color:#059669;margin:-0.75rem 0 1rem;"></p>';
+
+        // 飛行前点検
+        html += renderCheckTable(PREFLIGHT_ITEMS, '飛行前点検', '#eff6ff', '#1e40af', '#bfdbfe', 'preflight-notes');
+        html += '<div class="flex" style="align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">';
+        html += '<input type="checkbox" id="maint-check" class="checkbox"' + (state.maintenanceChecked ? ' checked' : '') + ' onchange="state.maintenanceChecked=this.checked" />';
+        html += '<label for="maint-check">飛行後の整備記録を自動作成</label></div>';
+        html += '<button onclick="startFlight()" class="btn btn-start">▶ 飛行開始</button>';
+    }
+    html += '</div>';
+
+    // 過去の記録
+    html += '<h2 class="font-bold" style="font-size:1.25rem;margin-bottom:1rem;">過去の飛行記録（' + logs.length + '件）</h2>';
+    logs.forEach(log => { html += renderFlightLogCard(log); });
+    if (!logs.length) html += '<div class="empty-state">飛行記録がありません</div>';
+    return html;
+}
+
+// ─── 点検チェックテーブル ─────────────────────────────────────────────────────
+function renderCheckTable(items, title, bgColor, textColor, borderColor, notesId) {
+    let html = '<div style="border:2px solid ' + borderColor + ';border-radius:0.5rem;padding:1.25rem;margin-bottom:1.5rem;background:' + bgColor + '">';
+    html += '<h4 class="font-bold" style="margin-bottom:1rem;color:' + textColor + ';">' + title + '</h4>';
+    html += '<table class="check-table"><thead><tr>';
+    html += '<th class="col-no">No.</th><th class="col-item">点検項目</th><th class="col-check">点検内容</th><th class="col-ok">正常</th>';
+    html += '</tr></thead><tbody>';
+    items.forEach((item, i) => {
+        html += '<tr><td class="col-no" style="color:#6b7280;">' + (i+1) + '</td>';
+        html += '<td class="col-item"><strong>' + item.label + '</strong></td>';
+        html += '<td class="col-check" style="color:#4b5563;font-size:0.85rem;">' + item.desc + '</td>';
+        html += '<td class="col-ok"><label class="check-normal-label"><input type="checkbox" id="' + item.id + '" class="checkbox" checked /> 正常</label></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    // 特記事項
+    if (notesId) {
+        html += '<div style="margin-top:0.75rem;">';
+        html += '<label class="label" style="font-size:0.85rem;color:' + textColor + ';">特記事項</label>';
+        html += '<textarea id="' + notesId + '" class="textarea" rows="2" placeholder="異常・気になる点があれば記入してください">異常無し</textarea>';
+        html += '</div>';
+    }
+    html += '</div>';
+    return html;
+}
+
+// ─── 飛行記録カード ───────────────────────────────────────────────────────────
+function renderFlightLogCard(log) {
+    const secs = log.totalFlightSecs || secsFromStartEnd(log.startTime, log.endTime);
+    const sessionCount = log.sessions ? log.sessions.length : 1;
+
+    let html = '<div class="card"><div class="flex-between mb-2">';
+    html += '<div><h3 class="font-bold" style="font-size:1.1rem;">' + getDroneName(log.droneId) + '</h3>';
+    html += '<p class="text-gray text-sm">' + log.date + ' ／ ' + log.location + '</p></div>';
+    html += '<div class="flex gap-2" style="align-items:flex-start;">';
+    html += '<span class="badge badge-blue">実飛行 ' + calcFlightTime(secs) + '</span>';
+    if (sessionCount > 1) html += '<span class="badge badge-orange">🔋×' + sessionCount + '</span>';
+    html += '<button onclick="openEditModal(\'' + log.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+    html += '<button onclick="deleteFlightLog(\'' + log.id + '\')" class="btn btn-danger btn-small">🗑</button>';
+    html += '</div></div>';
+
+    html += '<div class="grid grid-2 text-sm" style="margin-bottom:0.5rem;">';
+    html += '<p><span class="font-medium">操縦者:</span> ' + getPilotName(log.pilotId) + '</p>';
+    html += '<p><span class="font-medium">目的:</span> ' + log.purpose + '</p>';
+    if (log.flightMode) html += '<p style="grid-column:1/-1"><span class="font-medium">飛行形態:</span> ' + log.flightMode + '</p>';
+    html += '<p><span class="font-medium">時刻:</span> ' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
+    html += '<p><span class="font-medium">気象:</span> ' + log.weather + '</p>';
+    const toAddr = log.takeoffAddress || log.takeoffLocation || '-';
+    const laAddr = log.landingAddress || log.landingLocation || '-';
+    html += '<p><span class="font-medium">離陸場所:</span> ' + toAddr + '</p>';
+    html += '<p><span class="font-medium">着陸場所:</span> ' + laAddr + '</p>';
+    html += '</div>';
+    if (log.flightReport && log.flightReport !== '正常') {
+        html += '<p class="text-sm mt-1" style="color:#92400e;background:#fffbeb;padding:0.375rem 0.75rem;border-radius:0.375rem;">'
+              + '<span class="font-medium">✈ レポート:</span> ' + log.flightReport + '</p>';
+    } else if (log.flightReport) {
+        html += '<p class="text-sm mt-1 text-gray"><span class="font-medium">✈ レポート:</span> ' + log.flightReport + '</p>';
+    }
+
+    // セッション詳細
+    if (log.sessions && log.sessions.length > 1) {
+        html += '<div class="mt-2 pt-2 border-t text-sm">';
+        html += '<p class="font-medium mb-1">セッション詳細:</p>';
+        html += '<ul class="session-list">';
+        log.sessions.forEach(s => {
+            const to = s.takeoffTime || s.startTime || '-';
+            const la = s.landingTime || s.endTime   || '-';
+            html += '<li class="session-item">'
+                  + 'セッション ' + s.num + '　離陸 ' + to + ' → 着陸 ' + la
+                  + '<span class="badge badge-green">' + formatMinutes(s.elapsedSeconds) + '</span>'
+                  + '</li>';
+        });
+        html += '</ul></div>';
+    }
+
+    // 点検サマリー
+    html += '<div class="mt-2 pt-2 border-t text-sm flex gap-2" style="flex-wrap:wrap;">';
+    html += '<span><span class="font-medium">飛行前点検:</span> ' + checkSummary(log.preflightChecks, PREFLIGHT_ITEMS) + '</span>';
+    html += '<span><span class="font-medium">飛行後点検:</span> ' + checkSummary(log.postflightChecks, POSTFLIGHT_ITEMS) + '</span>';
+    html += '</div>';
+    if (log.preflightNotes || log.postflightNotes) {
+        html += '<div class="mt-2 text-sm" style="background:#fafafa;border-radius:0.375rem;padding:0.5rem 0.75rem;">';
+        if (log.preflightNotes) html += '<p><span class="font-medium">飛行前点検 特記事項:</span> ' + log.preflightNotes + '</p>';
+        if (log.postflightNotes) html += '<p' + (log.preflightNotes ? ' style="margin-top:0.25rem;"' : '') + '><span class="font-medium">飛行後点検 特記事項:</span> ' + log.postflightNotes + '</p>';
+        html += '</div>';
+    }
+
+    if (log.notes) html += '<p class="text-sm text-gray mt-2 pt-2 border-t"><span class="font-medium">備考:</span> ' + log.notes + '</p>';
+    html += '</div>';
+    return html;
+}
+
+// ─── 飛行後点検モーダル ───────────────────────────────────────────────────────
+function renderPostFlightModal() {
+    let html = '<div class="modal-overlay"><div class="modal">';
+    html += '<h2 class="modal-title" style="color:#1e40af;">飛行後点検</h2>';
+
+    // セッションサマリー
+    const totalSecs = state.sessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
+    html += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:0.5rem;padding:0.75rem;margin-bottom:1.25rem;font-size:0.9rem;">';
+    html += '<strong>総実飛行時間: ' + formatMinutes(totalSecs) + '</strong>（' + state.sessions.length + 'セッション）<br>';
+    html += state.sessions.map(s => {
+        const to = s.takeoffTime || '-';
+        const la = s.landingTime || '-';
+        return 'セッション' + s.num + ': 離陸 ' + to + ' → 着陸 ' + la + ' (' + formatMinutes(s.elapsedSeconds) + ')';
+    }).join('<br>');
+    html += '</div>';
+
+    // 飛行後点検テーブル
+    html += '<h4 class="font-bold" style="margin-bottom:0.75rem;color:#1e40af;">点検項目</h4>';
+    html += '<table class="check-table" style="margin-bottom:1.25rem;"><thead><tr>';
+    html += '<th class="col-no">No.</th><th class="col-item">点検項目</th><th class="col-check">点検内容</th><th class="col-ok">正常</th>';
+    html += '</tr></thead><tbody>';
+    POSTFLIGHT_ITEMS.forEach((item, i) => {
+        const checked = state.postFlightChecks[item.id] !== false;
+        html += '<tr><td class="col-no" style="color:#6b7280;">' + (i+1) + '</td>';
+        html += '<td class="col-item"><strong>' + item.label + '</strong></td>';
+        html += '<td class="col-check" style="color:#4b5563;font-size:0.85rem;">' + item.desc + '</td>';
+        html += '<td class="col-ok"><label class="check-normal-label"><input type="checkbox" id="po_' + item.id + '" class="checkbox"' + (checked?' checked':'') + ' onchange="state.postFlightChecks[\'' + item.id + '\']=this.checked" /> 正常</label></td>';
+        html += '</tr>';
+    });
+    html += '</tbody></table>';
+    // 飛行後点検 特記事項
+    html += '<div style="margin-top:0.75rem;margin-bottom:1.25rem;">';
+    html += '<label class="label" style="font-size:0.85rem;color:#1e40af;">特記事項</label>';
+    html += '<textarea id="postflight-notes" class="textarea" rows="2" placeholder="異常・気になる点があれば記入してください">異常無し</textarea>';
+    html += '</div>';
+    html += '<div class="grid grid-2" style="margin-bottom:1rem;">';
+    html += '<div class="form-group"><label class="label">飛行場所 *</label>';
+    html += '<input type="text" id="final-location" class="input" value="' + (TEST_MODE ? DUMMY_FLIGHT_LOCATION : '') + '" placeholder="例: ○○公園" /></div>';
+    html += '<div class="form-group"><label class="label">備考</label>';
+    html += '<input type="text" id="final-notes" class="input" value="' + (TEST_MODE ? DUMMY_NOTES : '') + '" placeholder="特記事項など" /></div>';
+    html += '</div>';
+    // レポート（飛行中の不具合）
+    html += '<div style="border:2px solid #fde68a;border-radius:0.5rem;padding:1rem;background:#fffbeb;margin-bottom:1.25rem;">';
+    html += '<p class="font-bold" style="color:#92400e;margin-bottom:0.5rem;">✈ レポート（飛行中の不具合）</p>';
+    html += '<textarea id="flight-report" class="textarea" rows="2">正常</textarea>';
+    html += '</div>';
+
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="saveFlightWithPostCheck()" class="btn btn-primary" style="font-size:1rem;">💾 記録を保存</button>';
+    html += '</div>';
+    html += '</div></div>';
+    return html;
+}
+
+// ─── 編集モーダル ─────────────────────────────────────────────────────────────
+function renderEditModal() {
+    const log = state.editingLog;
+
+    // sessions が存在しない旧データは startTime/endTime を単一セッションとして扱う
+    const sessions = (log.sessions && log.sessions.length > 0)
+        ? log.sessions
+        : [{ num: 1,
+             takeoffTime: log.startTime || '',
+             landingTime: log.endTime   || '',
+             elapsedSeconds: log.totalFlightSecs || 0 }];
+
+    let html = '<div class="modal-overlay"><div class="modal" style="max-width:720px;">';
+    html += '<h2 class="modal-title">飛行記録を編集</h2>';
+    html += '<p class="text-sm text-gray" style="margin-bottom:1.25rem;">' + log.date + ' ／ ' + getDroneName(log.droneId) + '</p>';
+
+    // ── 基本情報 ──────────────────────────────────────────────────────────────
+    html += '<div class="grid grid-2" style="margin-bottom:0.5rem;">';
+    html += '<div class="form-group"><label class="label">飛行場所 *</label><input type="text" id="edit-location" class="input" value="' + (log.location||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">飛行目的</label><input type="text" id="edit-purpose" class="input" value="' + (log.purpose||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">気象状況</label><input type="text" id="edit-weather" class="input" value="' + (log.weather||'') + '" /></div>';
+    html += '</div>';
+    html += '<div class="form-group" style="margin-bottom:1.25rem;"><label class="label">備考</label><textarea id="edit-notes" class="textarea" rows="2">' + (log.notes||'') + '</textarea></div>';
+
+    // ── 飛行時間（セッション別） ────────────────────────────────────────────
+    html += '<div style="border:2px solid #bfdbfe;border-radius:0.5rem;padding:1rem;background:#eff6ff;margin-bottom:1.25rem;">';
+    html += '<p class="font-bold" style="color:#1e40af;margin-bottom:0.75rem;">飛行時間</p>';
+
+    sessions.forEach((s, i) => {
+        const prefix = 'sess_' + i;
+        const takeoff = toTimeInput(s.takeoffTime || s.startTime || '');
+        const landing = toTimeInput(s.landingTime || s.endTime   || '');
+        const elapsed = s.elapsedSeconds || 0;
+
+        html += '<div style="background:white;border:1px solid #dbeafe;border-radius:0.375rem;padding:0.75rem;margin-bottom:0.5rem;">';
+        if (sessions.length > 1) {
+            html += '<p class="font-medium text-sm" style="margin-bottom:0.5rem;color:#374151;">セッション ' + s.num + '</p>';
+        }
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;align-items:end;">';
+
+        // 離陸時刻
+        html += '<div><label class="label" style="font-size:0.8rem;">離陸時刻</label>'
+              + '<input type="time" id="' + prefix + '_takeoff" class="input" value="' + takeoff + '" '
+              + 'onchange="recalcSessionTime(' + i + ')" /></div>';
+
+        // 着陸時刻
+        html += '<div><label class="label" style="font-size:0.8rem;">着陸時刻</label>'
+              + '<input type="time" id="' + prefix + '_landing" class="input" value="' + landing + '" '
+              + 'onchange="recalcSessionTime(' + i + ')" /></div>';
+
+        // 飛行時間（自動計算・表示のみ）
+        html += '<div><label class="label" style="font-size:0.8rem;">飛行時間</label>'
+              + '<div id="' + prefix + '_duration" style="padding:0.5rem 0.75rem;background:#f3f4f6;border-radius:0.5rem;font-size:1rem;font-weight:600;color:#1e40af;">'
+              + formatMinutes(elapsed) + '</div></div>';
+
+        html += '</div></div>';
+    });
+
+    html += '<div style="text-align:right;margin-top:0.5rem;">';
+    html += '<span class="font-medium text-sm" style="color:#374151;">総実飛行時間：</span>';
+    html += '<span id="edit-total-time" style="font-size:1.1rem;font-weight:700;color:#1e40af;margin-left:0.5rem;">';
+    const currentTotal = sessions.reduce((s, sess) => s + (sess.elapsedSeconds || 0), 0);
+    html += formatMinutes(currentTotal) + '</span>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="saveEdit()" class="btn btn-primary">保存</button>';
+    html += '<button onclick="closeEditModal()" class="btn btn-secondary">キャンセル</button>';
+    html += '</div></div></div>';
+    return html;
+}
+
+// 時刻文字列を type="time" の value 形式（HH:MM）に正規化
+function toTimeInput(str) {
+    if (!str) return '';
+    // 「午前9:15」「午後2:30」形式への対応
+    str = str.replace('午前', '').replace('午後', '').trim();
+    const parts = str.split(':');
+    if (parts.length < 2) return '';
+    const h = String(parseInt(parts[0]) || 0).padStart(2, '0');
+    const m = String(parseInt(parts[1]) || 0).padStart(2, '0');
+    return h + ':' + m;
+}
+
+// 編集モーダル内でのセッション時間リアルタイム再計算
+function recalcSessionTime(idx) {
+    const takeoffEl = document.getElementById('sess_' + idx + '_takeoff');
+    const landingEl = document.getElementById('sess_' + idx + '_landing');
+    const durationEl = document.getElementById('sess_' + idx + '_duration');
+    const totalEl = document.getElementById('edit-total-time');
+    if (!takeoffEl || !landingEl || !durationEl) return;
+
+    const t = takeoffEl.value, l = landingEl.value;
+    let secs = 0;
+    if (t && l) {
+        const [th, tm] = t.split(':').map(Number);
+        const [lh, lm] = l.split(':').map(Number);
+        secs = Math.max(0, (lh * 60 + lm - (th * 60 + tm)) * 60);
+    }
+    durationEl.textContent = formatMinutes(secs);
+
+    // 全セッションの合計を再計算
+    if (totalEl) {
+        let total = 0;
+        let i = 0;
+        while (true) {
+            const d = document.getElementById('sess_' + i + '_duration');
+            if (!d) break;
+            total += minsTextToSecs(d.textContent);
+            i++;
+        }
+        totalEl.textContent = formatMinutes(total);
+    }
+}
+function minsTextToSecs(str) {
+    // 「X時間Y分」or「X分」→ seconds
+    if (!str) return 0;
+    const h = (str.match(/(\d+)時間/) || [])[1] || 0;
+    const m = (str.match(/(\d+)分/)   || [])[1] || 0;
+    return (parseInt(h) * 3600) + (parseInt(m) * 60);
+}
+
+// ─── 機体編集モーダル ─────────────────────────────────────────────────────────
+function renderDroneEditModal() {
+    const d = state.editingDrone;
+    let html = '<div class="modal-overlay"><div class="modal" style="max-width:560px;">';
+    html += '<h2 class="modal-title">機体情報を編集</h2>';
+    html += '<div class="grid grid-2">';
+    html += '<div class="form-group"><label class="label">メーカー *</label><input type="text" id="de-mfg" class="input" value="' + (d.manufacturer||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">機種 *</label><input type="text" id="de-model" class="input" value="' + (d.model||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">製造番号 *</label><input type="text" id="de-serial" class="input" value="' + (d.serialNumber||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">登録記号</label><input type="text" id="de-reg" class="input" value="' + (d.registrationNumber||'') + '" placeholder="JU-XXXXX" /></div>';
+    html += '<div class="form-group"><label class="label">重量（g）*</label><input type="number" id="de-weight" class="input" value="' + (d.weight||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">購入日</label><input type="date" id="de-purchase" class="input" value="' + (d.purchaseDate||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">アプリ登録年月日</label><input type="date" id="de-app-reg-date" class="input" value="' + (d.appRegisteredDate||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">登録前の総飛行時間（分）</label><input type="number" id="de-pre-mins" class="input" min="0" value="' + (d.preRegistrationMins||0) + '" /></div>';
+    html += '</div>';
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="saveDroneEdit()" class="btn btn-primary">保存</button>';
+    html += '<button onclick="closeDroneEditModal()" class="btn btn-secondary">キャンセル</button>';
+    html += '</div></div></div>';
+    return html;
+}
+
+// ─── 操縦者編集モーダル描画 ───────────────────────────────────────────────────
+function renderPilotEditModal() {
+    const p = state.editingPilot;
+    const lims = p.limitations || {};
+    const aircraftTypes = lims.aircraftType || [];
+    let html = '<div class="modal-overlay"><div class="modal" style="max-width:680px;">';
+    html += '<h2 class="modal-title">操縦者情報を編集</h2>';
+    html += '<div class="grid grid-2">';
+    html += '<div class="form-group"><label class="label">氏名 *</label><input type="text" id="pe-name" class="input" value="' + (p.name||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">生年月日 *</label><input type="date" id="pe-birth" class="input" value="' + (p.birthDate||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">技能証明種類 *</label><select id="pe-license-type" class="select">';
+    ['','一等無人航空機操縦士','二等無人航空機操縦士','なし'].forEach(t => {
+        html += '<option' + (p.licenseType === t ? ' selected' : '') + '>' + t + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div class="form-group"><label class="label">技能証明番号</label><input type="text" id="pe-license-number" class="input" value="' + (p.licenseNumber||'') + '" placeholder="例: 1A-XXXX-XXXX" /></div>';
+    html += '<div class="form-group"><label class="label">発行日</label><input type="date" id="pe-issue-date" class="input" value="' + (p.issueDate||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">有効期限</label><input type="date" id="pe-expiry-date" class="input" value="' + (p.expiryDate||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">住所</label><input type="text" id="pe-address" class="input" value="' + (p.address||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">電話番号</label><input type="tel" id="pe-phone" class="input" value="' + (p.phone||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">メールアドレス</label><input type="email" id="pe-email" class="input" value="' + (p.email||'') + '" /></div>';
+    html += '</div>';
+    html += '<div style="border:1px solid #d1d5db;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;">';
+    html += '<h4 class="font-bold" style="margin-bottom:1rem;">限定事項</h4><div class="grid grid-2">';
+    html += '<div><label class="label">機体の種類</label><div style="display:flex;flex-direction:column;gap:0.5rem;">';
+    [['マルチローター','マルチローター（回転翼）'],['ヘリコプター','ヘリコプター（回転翼）'],['飛行機','飛行機（固定翼）']].forEach(([v,l]) => {
+        const checked = aircraftTypes.includes(v) ? ' checked' : '';
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;"><input type="checkbox" name="pe-aircraft-type" value="' + v + '" class="checkbox"' + checked + ' /> ' + l + '</label>';
+    });
+    html += '</div></div>';
+    html += '<div><label class="label">飛行方法の制限</label><div style="display:flex;flex-direction:column;gap:0.5rem;">';
+    [['pe-limit-visual','目視内飛行限定','visualOnly'],['pe-limit-daytime','昼間飛行限定','daytimeOnly'],['pe-limit-25kg','25kg未満限定','under25kg']].forEach(([id,l,key]) => {
+        const checked = lims[key] ? ' checked' : '';
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;"><input type="checkbox" id="' + id + '" class="checkbox"' + checked + ' /> ' + l + '</label>';
+    });
+    html += '</div></div></div></div>';
+    html += '<div class="form-group"><label class="label">備考</label><textarea id="pe-notes" class="textarea" rows="2">' + (p.notes||'') + '</textarea></div>';
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="savePilotEdit()" class="btn btn-primary">保存</button>';
+    html += '<button onclick="closePilotEditModal()" class="btn btn-secondary">キャンセル</button>';
+    html += '</div></div></div>';
+    return html;
+}
+
+// ─── 整備記録編集モーダル描画 ─────────────────────────────────────────────────
+function renderMaintenanceEditModal() {
+    const m = state.editingMaintenance;
+    let html = '<div class="modal-overlay"><div class="modal" style="max-width:680px;">';
+    html += '<h2 class="modal-title">整備記録を編集</h2>';
+    html += '<div class="grid grid-2">';
+    html += '<div class="form-group"><label class="label">機体</label><select id="me-drone" class="select">';
+    state.drones.forEach(d => {
+        html += '<option value="' + d.id + '"' + (m.droneId === d.id ? ' selected' : '') + '>' + d.manufacturer + ' ' + d.model + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="me-date" class="input" value="' + (m.date||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">整備種別</label><select id="me-type" class="select">';
+    ['定期点検','飛行後点検','修理','部品交換','清掃','その他'].forEach(t => {
+        html += '<option' + (m.type === t ? ' selected' : '') + '>' + t + '</option>';
+    });
+    html += '</select></div>';
+    html += '<div class="form-group"><label class="label">作業者</label><input type="text" id="me-tech" class="input" value="' + (m.technician||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">整備場所</label><input type="text" id="me-location" class="input" value="' + (m.maintenanceLocation||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="me-next" class="input" value="' + (m.nextDate||'') + '" /></div>';
+    html += '</div>';
+    html += '<div class="form-group"><label class="label">整備内容</label><textarea id="me-desc" class="textarea" rows="3">' + (m.description||'') + '</textarea></div>';
+    html += '<div class="form-group"><label class="label">備考</label><textarea id="me-notes" class="textarea" rows="2">' + (m.notes||'') + '</textarea></div>';
+    html += '<div class="flex gap-2">';
+    html += '<button onclick="saveMaintenanceEdit()" class="btn btn-primary">保存</button>';
+    html += '<button onclick="closeMaintenanceEditModal()" class="btn btn-secondary">キャンセル</button>';
+    html += '</div></div></div>';
+    return html;
+}
+
+// ─── 整備記録タブ ─────────────────────────────────────────────────────────────
+function renderMaintenanceTab() {
+    const logs = filterLogs(state.maintenanceLogs);
+    let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">整備記録（' + logs.length + '件）</h2>';
+    html += '<button onclick="state.showMaintenanceForm=!state.showMaintenanceForm;render();" class="btn btn-primary">+ 新規記録</button></div>';
+    if (state.showMaintenanceForm) {
+        html += '<div class="form-card"><div class="grid grid-2">';
+        html += '<div class="form-group"><label class="label">機体</label><select id="maint-drone" class="select"><option value="">選択</option>';
+        state.drones.forEach(d => { html += '<option value="' + d.id + '">' + d.manufacturer + ' ' + d.model + '</option>'; });
+        html += '</select></div>';
+        html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="maint-date" class="input" value="' + new Date().toISOString().split('T')[0] + '" /></div>';
+        html += '<div class="form-group"><label class="label">整備種別</label><select id="maint-type" class="select">';
+        ['','定期点検','飛行後点検','修理','部品交換','清掃','その他'].forEach(t => { html += '<option>' + t + '</option>'; });
+        html += '</select></div>';
+        const tech = TEST_MODE && state.pilots.length > 0 ? state.pilots[0].name : '';
+        html += '<div class="form-group"><label class="label">作業者</label><input type="text" id="maint-tech" class="input" value="' + tech + '" /></div>';
+        const loc = TEST_MODE ? dummyLocation() : '';
+        html += '<div class="form-group"><label class="label">整備場所' + (TEST_MODE?' <span class="badge badge-orange">テスト値</span>':'') + '</label>';
+        html += '<input type="text" id="maint-location" class="input" value="' + loc + '" /></div>';
+        html += '<div class="form-group"><label class="label">次回整備予定日</label><input type="date" id="maint-next" class="input" /></div>';
+        html += '</div>';
+        html += '<div class="form-group"><label class="label">整備内容</label><textarea id="maint-desc" class="textarea" rows="3">' + (TEST_MODE?'飛行後の定期点検実施。異常なし。':'') + '</textarea></div>';
+        html += '<div class="form-group"><label class="label">備考</label><textarea id="maint-notes" class="textarea" rows="2"></textarea></div>';
+        html += '<div class="flex gap-2"><button onclick="submitMaintenanceLog()" class="btn btn-primary">保存</button>';
+        html += '<button onclick="state.showMaintenanceForm=false;render();" class="btn btn-secondary">キャンセル</button></div></div>';
+    }
+    logs.forEach(log => {
+        html += '<div class="card"><div class="flex-between mb-2"><div>';
+        html += '<h3 class="font-bold" style="font-size:1.1rem;">' + getDroneName(log.droneId) + '</h3>';
+        html += '<p class="text-gray text-sm">' + log.date + '</p></div>';
+        html += '<div class="flex gap-2" style="align-items:center;">';
+        html += '<span class="badge badge-green">' + log.type + '</span>';
+        html += '<button onclick="openMaintenanceEditModal(\'' + log.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+        html += '<button onclick="deleteMaintenanceLog(\'' + log.id + '\')" class="btn btn-danger btn-small">🗑</button>';
+        html += '</div></div>';
+        html += '<div class="text-sm"><p><span class="font-medium">作業者:</span> ' + log.technician + '</p>';
+        if (log.maintenanceLocation) html += '<p><span class="font-medium">場所:</span> ' + log.maintenanceLocation + '</p>';
+        html += '<p class="mt-2"><span class="font-medium">内容:</span> ' + log.description + '</p></div>';
+        if (log.nextDate) html += '<p class="text-sm mt-2" style="color:#2563eb;">次回整備予定: ' + log.nextDate + '</p>';
+        if (log.notes) html += '<p class="text-sm text-gray mt-2 pt-2 border-t"><span class="font-medium">備考:</span> ' + log.notes + '</p>';
+        html += '</div>';
+    });
+    if (!logs.length) html += '<div class="empty-state">整備記録がありません</div>';
+    return html;
+}
+
+// ─── 機体管理タブ ─────────────────────────────────────────────────────────────
+function renderDronesTab() {
+    let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">登録機体（' + state.drones.length + '機）</h2>';
+    html += '<button onclick="state.showDroneForm=!state.showDroneForm;render();" class="btn btn-primary">+ 機体追加</button></div>';
+    if (state.showDroneForm) {
+        html += '<div class="form-card"><div class="grid grid-2">';
+        [['drone-mfg','メーカー *','text'],['drone-model','機種 *','text'],['drone-serial','製造番号 *','text'],
+         ['drone-reg','登録記号','text'],['drone-weight','重量（g）*','number'],['drone-purchase','購入日 *','date']].forEach(([id,label,type]) => {
+            html += '<div class="form-group"><label class="label">' + label + '</label><input type="' + type + '" id="' + id + '" class="input"' + (id==='drone-reg'?' placeholder="JU-XXXXX"':'') + ' /></div>';
+        });
+        html += '<div class="form-group"><label class="label">アプリ登録年月日</label>'
+              + '<input type="date" id="drone-app-reg-date" class="input" value="' + new Date().toISOString().split('T')[0] + '" /></div>';
+        html += '<div class="form-group"><label class="label">登録前の総飛行時間（分）</label>'
+              + '<input type="number" id="drone-pre-mins" class="input" min="0" placeholder="0" /></div>';
+        html += '</div><div class="flex gap-2"><button onclick="submitDrone()" class="btn btn-primary">保存</button>';
+        html += '<button onclick="state.showDroneForm=false;render();" class="btn btn-secondary">キャンセル</button></div></div>';
+    }
+    html += '<div class="grid grid-2">';
+    state.drones.forEach(d => {
+        // この機体の総飛行時間・飛行回数を集計
+        const droneLogs = state.flightLogs.filter(l => l.droneId === d.id);
+        const appSecs   = droneLogs.reduce((sum, l) => sum + (l.totalFlightSecs || 0), 0);
+        const preRegSecs = (d.preRegistrationMins || 0) * 60;
+        const totalSecs  = appSecs + preRegSecs;
+        const flightCount = droneLogs.length;
+        const lastFlight = droneLogs[0];
+
+        html += '<div class="card"><div class="flex-between" style="margin-bottom:0.5rem;">';
+        html += '<h3 class="font-bold" style="font-size:1.1rem;">' + d.manufacturer + ' ' + d.model + '</h3>';
+        html += '<button onclick="openDroneEditModal(\'' + d.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+        html += '</div>';
+        // 飛行統計バナー
+        html += '<div style="background:#eff6ff;border-radius:0.375rem;padding:0.5rem 0.75rem;margin-bottom:0.75rem;">';
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        html += '<div style="text-align:center;">';
+        html += '<div style="font-size:1.25rem;font-weight:700;color:#1e40af;">' + formatMinutes(totalSecs) + '</div>';
+        html += '<div style="font-size:0.7rem;color:#6b7280;">累計総飛行時間</div>';
+        html += '</div>';
+        html += '<div style="text-align:center;">';
+        html += '<div style="font-size:1.25rem;font-weight:700;color:#1e40af;">' + flightCount + '回</div>';
+        html += '<div style="font-size:0.7rem;color:#6b7280;">飛行回数</div>';
+        html += '</div>';
+        html += '<div style="text-align:center;">';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:#374151;">' + (lastFlight ? lastFlight.date : '—') + '</div>';
+        html += '<div style="font-size:0.7rem;color:#6b7280;">最終飛行</div>';
+        html += '</div></div>';
+        // 内訳（登録前時間がある場合のみ表示）
+        if (preRegSecs > 0) {
+            html += '<div style="margin-top:0.375rem;padding-top:0.375rem;border-top:1px solid #bfdbfe;font-size:0.75rem;color:#6b7280;display:flex;gap:1rem;">';
+            html += '<span>アプリ記録: <strong style="color:#1e40af;">' + formatMinutes(appSecs) + '</strong></span>';
+            html += '<span>登録前: <strong style="color:#6b7280;">' + formatMinutes(preRegSecs) + '</strong></span>';
+            html += '</div>';
+        }
+        html += '</div>';
+        html += '<div class="text-sm" style="line-height:1.8;">';
+        html += '<p><span class="font-medium">製造番号:</span> ' + d.serialNumber + '</p>';
+        if (d.registrationNumber) html += '<p><span class="font-medium">登録記号:</span> ' + d.registrationNumber + '</p>';
+        html += '<p><span class="font-medium">重量:</span> ' + d.weight + 'g</p>';
+        html += '<p><span class="font-medium">購入日:</span> ' + d.purchaseDate + '</p>';
+        if (d.appRegisteredDate) html += '<p><span class="font-medium">アプリ登録日:</span> ' + d.appRegisteredDate + '</p>';
+        html += '</div></div>';
+    });
+    html += '</div>';
+    if (!state.drones.length) html += '<div class="empty-state">登録機体がありません</div>';
+    return html;
+}
+
+// ─── 操縦者管理タブ ───────────────────────────────────────────────────────────
+function renderPilotsTab() {
+    let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">登録操縦者（' + state.pilots.length + '名）</h2>';
+    html += '<button onclick="state.showPilotForm=!state.showPilotForm;render();" class="btn btn-primary">+ 操縦者追加</button></div>';
+    if (state.showPilotForm) {
+        html += '<div class="form-card"><div class="grid grid-2">';
+        html += '<div class="form-group"><label class="label">氏名 *</label><input type="text" id="pilot-name" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">生年月日 *</label><input type="date" id="pilot-birth" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">技能証明種類 *</label><select id="pilot-license-type" class="select">';
+        ['','一等無人航空機操縦士','二等無人航空機操縦士','なし'].forEach(t => { html += '<option>' + t + '</option>'; });
+        html += '</select></div>';
+        html += '<div class="form-group"><label class="label">技能証明番号</label><input type="text" id="pilot-license-number" class="input" placeholder="例: 1A-XXXX-XXXX" /></div>';
+        html += '<div class="form-group"><label class="label">発行日</label><input type="date" id="pilot-issue-date" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">有効期限</label><input type="date" id="pilot-expiry-date" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">住所</label><input type="text" id="pilot-address" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">電話番号</label><input type="tel" id="pilot-phone" class="input" /></div>';
+        html += '<div class="form-group"><label class="label">メールアドレス</label><input type="email" id="pilot-email" class="input" /></div>';
+        html += '</div>';
+        html += '<div style="border:1px solid #d1d5db;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;">';
+        html += '<h4 class="font-bold" style="margin-bottom:1rem;">限定事項</h4><div class="grid grid-2">';
+        html += '<div><label class="label">機体の種類</label><div style="display:flex;flex-direction:column;gap:0.5rem;">';
+        [['マルチローター','マルチローター（回転翼）'],['ヘリコプター','ヘリコプター（回転翼）'],['飛行機','飛行機（固定翼）']].forEach(([v,l]) => {
+            html += '<label style="display:flex;align-items:center;gap:0.5rem;"><input type="checkbox" name="aircraft-type" value="' + v + '" class="checkbox" /> ' + l + '</label>';
+        });
+        html += '</div></div>';
+        html += '<div><label class="label">飛行方法の制限</label><div style="display:flex;flex-direction:column;gap:0.5rem;">';
+        [['limit-visual','目視内飛行限定'],['limit-daytime','昼間飛行限定'],['limit-25kg','25kg未満限定']].forEach(([id,l]) => {
+            html += '<label style="display:flex;align-items:center;gap:0.5rem;"><input type="checkbox" id="' + id + '" class="checkbox" /> ' + l + '</label>';
+        });
+        html += '</div></div></div></div>';
+        html += '<div class="form-group"><label class="label">備考</label><textarea id="pilot-notes" class="textarea" rows="2"></textarea></div>';
+        html += '<div class="flex gap-2"><button onclick="submitPilot()" class="btn btn-primary">保存</button>';
+        html += '<button onclick="state.showPilotForm=false;render();" class="btn btn-secondary">キャンセル</button></div></div>';
+    }
+    html += '<div class="grid grid-2">';
+    state.pilots.forEach(pilot => {
+        html += '<div class="card"><div class="flex-between" style="margin-bottom:0.5rem;">';
+        html += '<h3 class="font-bold" style="font-size:1.1rem;">' + pilot.name + '</h3>';
+        html += '<button onclick="openPilotEditModal(\'' + pilot.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
+        html += '</div>';
+        html += '<div class="text-sm" style="line-height:1.8;">';
+        html += '<p><span class="font-medium">技能証明:</span> ' + pilot.licenseType + '</p>';
+        if (pilot.licenseNumber) html += '<p><span class="font-medium">証明番号:</span> ' + pilot.licenseNumber + '</p>';
+        if (pilot.expiryDate) {
+            const days = Math.floor((new Date(pilot.expiryDate) - new Date()) / 86400000);
+            html += '<p><span class="font-medium">有効期限:</span> ' + pilot.expiryDate;
+            if (days < 0) html += ' <span style="color:#dc2626;">(期限切れ)</span>';
+            else if (days < 30) html += ' <span style="color:#f59e0b;">(残り' + days + '日)</span>';
+            html += '</p>';
+        }
+        html += '<p><span class="font-medium">生年月日:</span> ' + pilot.birthDate + '</p>';
+        if (pilot.phone) html += '<p><span class="font-medium">電話:</span> ' + pilot.phone + '</p>';
+        if (pilot.limitations) {
+            const limits = [];
+            if (pilot.limitations.visualOnly)  limits.push('目視内限定');
+            if (pilot.limitations.daytimeOnly) limits.push('昼間限定');
+            if (pilot.limitations.under25kg)   limits.push('25kg未満限定');
+            if (pilot.limitations.aircraftType?.length || limits.length) {
+                html += '<div style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid #e5e7eb;">';
+                if (pilot.limitations.aircraftType?.length) html += '<p class="text-xs text-gray">機体: ' + pilot.limitations.aircraftType.join(', ') + '</p>';
+                if (limits.length) html += '<p class="text-xs text-gray">制限: ' + limits.join(', ') + '</p>';
+                html += '</div>';
+            }
+        }
+        html += '</div></div>';
+    });
+    html += '</div>';
+    if (!state.pilots.length) html += '<div class="empty-state">登録操縦者がいません</div>';
+    return html;
+}
+
+// 初期化
+loadData();
+</script>
+</body>
+</html>
