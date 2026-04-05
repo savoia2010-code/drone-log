@@ -728,17 +728,36 @@ function openEditModal(logId) {
 }
 function closeEditModal() { state.showEditModal = false; state.editingLog = null; render(); }
 async function saveEdit() {
-    const loc     = document.getElementById('edit-location').value.trim();
-    const purpose = document.getElementById('edit-purpose').value.trim();
-    const weather = document.getElementById('edit-weather').value.trim();
-    const notes   = document.getElementById('edit-notes').value.trim();
-    if (!loc) { alert('飛行場所は必須です'); return; }
+    const loc            = document.getElementById('edit-location').value.trim();
+    const purpose        = document.getElementById('edit-purpose').value.trim();
+    const weather        = document.getElementById('edit-weather').value.trim();
+    const notes          = document.getElementById('edit-notes').value.trim();
+    const pilotId        = document.getElementById('edit-pilot').value;
+    const takeoffAddress = document.getElementById('edit-takeoff-address').value.trim();
+    const landingAddress = document.getElementById('edit-landing-address').value.trim();
 
-    // セッション時間を読み取り・再計算
+    // 飛行形態
+    const FM_LABELS = [
+        ['edit_fm_01','目視内飛行'],['edit_fm_02','目視外飛行'],['edit_fm_03','夜間飛行'],
+        ['edit_fm_04','人口集中地区（DID）上空'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
+        ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下'],['edit_fm_09','人又は物件から30m未満'],
+    ];
+    const flightMode = FM_LABELS.filter(([id]) => { const el = document.getElementById(id); return el && el.checked; }).map(([, l]) => l).join('、');
+
+    // 飛行前点検
+    const preflightChecks = {};
+    PREFLIGHT_ITEMS.forEach(item => { const el = document.getElementById('edit_' + item.id); preflightChecks[item.id] = el ? el.checked : true; });
+    const preflightNotes = document.getElementById('edit-preflight-notes').value.trim();
+
+    // 飛行後点検
+    const postflightChecks = {};
+    POSTFLIGHT_ITEMS.forEach(item => { const el = document.getElementById('edit_' + item.id); postflightChecks[item.id] = el ? el.checked : true; });
+    const postflightNotes  = document.getElementById('edit-postflight-notes').value.trim();
+    const flightReport     = document.getElementById('edit-flight-report').value.trim();
+
+    // セッション時間
     const baseSessions = (state.editingLog.sessions && state.editingLog.sessions.length > 0)
-        ? state.editingLog.sessions
-        : [{ num: 1 }];
-
+        ? state.editingLog.sessions : [{ num: 1 }];
     const updatedSessions = baseSessions.map((s, i) => {
         const takeoffVal = (document.getElementById('sess_' + i + '_takeoff')?.value || '').trim();
         const landingVal = (document.getElementById('sess_' + i + '_landing')?.value || '').trim();
@@ -750,12 +769,14 @@ async function saveEdit() {
         }
         return { ...s, takeoffTime: takeoffVal, landingTime: landingVal, elapsedSeconds: secs };
     });
-
     const totalSecs = updatedSessions.reduce((s, sess) => s + sess.elapsedSeconds, 0);
 
     const updated = {
         ...state.editingLog,
-        location: loc, purpose, weather, notes,
+        pilotId, location: loc, purpose, weather, notes,
+        takeoffAddress, landingAddress, flightMode,
+        preflightChecks, preflightNotes,
+        postflightChecks, postflightNotes, flightReport,
         sessions:        updatedSessions,
         totalFlightSecs: totalSecs,
         startTime:       updatedSessions[0]?.takeoffTime || state.editingLog.startTime || '',
@@ -1244,8 +1265,11 @@ function exportJourneyLogPDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7pt;color:#000;background:#fff;}
 @page{size:A4 landscape;margin:8mm 10mm 8mm;}
-.print-btn{display:block;margin:6px auto 10px;padding:6px 24px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
-@media print{.print-btn{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
+.no-print{display:flex;gap:8px;justify-content:center;margin:6px auto 10px;}
+.no-print button{padding:6px 20px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.btn-print{background:#1e40af;color:#fff;}
+.btn-close-win{background:#6b7280;color:#fff;}
+@media print{.no-print{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
 .page{width:100%;margin-bottom:0;}
 /* タイトル行 */
 .form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
@@ -1285,7 +1309,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
     const periodLabel = (state.pdfFrom || state.pdfTo)
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
-        + '<button class="print-btn" onclick="window.print()">🖨 印刷 / PDFで保存</button>'
+        + '<div class="no-print"><button class="btn-print" onclick="window.print()">🖨 印刷 / PDFで保存</button><button class="btn-close-win" onclick="window.close()">✕ 閉じる</button></div>'
         + body + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1371,8 +1395,11 @@ function exportInspectionPDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
 @page{size:A4 portrait;margin:8mm 10mm 8mm;}
-.print-btn{display:block;margin:6px auto 10px;padding:6px 24px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
-@media print{.print-btn{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
+.no-print{display:flex;gap:8px;justify-content:center;margin:6px auto 10px;}
+.no-print button{padding:6px 20px;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+.btn-print{background:#1e40af;color:#fff;}
+.btn-close-win{background:#6b7280;color:#fff;}
+@media print{.no-print{display:none;}.page{page-break-after:always;page-break-inside:avoid;}}
 .page{width:100%;}
 /* タイトル */
 .form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
@@ -1407,7 +1434,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
     const periodLabel = (state.pdfFrom || state.pdfTo)
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
-        + '<button class="print-btn" onclick="window.print()">🖨 印刷 / PDFで保存</button>'
+        + '<div class="no-print"><button class="btn-print" onclick="window.print()">🖨 印刷 / PDFで保存</button><button class="btn-close-win" onclick="window.close()">✕ 閉じる</button></div>'
         + body + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1830,62 +1857,88 @@ function renderEditModal() {
 
     let html = '<div class="modal-overlay"><div class="modal" style="max-width:720px;">';
     html += '<h2 class="modal-title">飛行記録を編集</h2>';
-    html += '<p class="text-sm text-gray" style="margin-bottom:1.25rem;">' + log.date + ' ／ ' + getDroneName(log.droneId) + '</p>';
+    html += '<p class="text-sm text-gray" style="margin-bottom:1.25rem;">' + _pdfFmtDate(log.date) + ' ／ ' + getDroneName(log.droneId) + '</p>';
 
-    // ── 基本情報 ──────────────────────────────────────────────────────────────
+    // ── 基本情報
     html += '<div class="grid grid-2" style="margin-bottom:0.5rem;">';
-    html += '<div class="form-group"><label class="label">飛行場所 *</label><input type="text" id="edit-location" class="input" value="' + (log.location||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">操縦者</label><select id="edit-pilot" class="select"><option value="">選択してください</option>';
+    state.pilots.forEach(p => {
+        html += '<option value="' + p.id + '"' + (String(p.id) === String(log.pilotId) ? ' selected' : '') + '>' + p.name + '</option>';
+    });
+    html += '</select></div>';
     html += '<div class="form-group"><label class="label">飛行目的</label><input type="text" id="edit-purpose" class="input" value="' + (log.purpose||'') + '" /></div>';
     html += '<div class="form-group"><label class="label">気象状況</label><input type="text" id="edit-weather" class="input" value="' + (log.weather||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">飛行場所（概要）</label><input type="text" id="edit-location" class="input" value="' + (log.location||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">離陸場所（住所）</label><input type="text" id="edit-takeoff-address" class="input" value="' + (log.takeoffAddress||'') + '" /></div>';
+    html += '<div class="form-group"><label class="label">着陸場所（住所）</label><input type="text" id="edit-landing-address" class="input" value="' + (log.landingAddress||'') + '" /></div>';
     html += '</div>';
-    html += '<div class="form-group" style="margin-bottom:1.25rem;"><label class="label">備考</label><textarea id="edit-notes" class="textarea" rows="2">' + (log.notes||'') + '</textarea></div>';
 
-    // ── 飛行時間（セッション別） ────────────────────────────────────────────
-    html += '<div style="border:2px solid #bfdbfe;border-radius:0.5rem;padding:1rem;background:#eff6ff;margin-bottom:1.25rem;">';
+    // ── 飛行形態
+    const fmCurrent = log.flightMode ? log.flightMode.split('、') : [];
+    html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;">';
+    html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態（特定飛行）</p>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;">';
+    [['edit_fm_01','目視内飛行'],['edit_fm_02','目視外飛行'],['edit_fm_03','夜間飛行'],
+     ['edit_fm_04','人口集中地区（DID）上空'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
+     ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下'],['edit_fm_09','人又は物件から30m未満']
+    ].forEach(([id, label]) => {
+        html += '<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;"><input type="checkbox" id="' + id + '" class="checkbox"' + (fmCurrent.includes(label) ? ' checked' : '') + ' /> ' + label + '</label>';
+    });
+    html += '</div></div>';
+
+    // ── 飛行時間（セッション別）
+    html += '<div style="border:2px solid #bfdbfe;border-radius:0.5rem;padding:1rem;background:#eff6ff;margin-bottom:1rem;">';
     html += '<p class="font-bold" style="color:#1e40af;margin-bottom:0.75rem;">飛行時間</p>';
-
     sessions.forEach((s, i) => {
         const prefix = 'sess_' + i;
         const takeoff = toTimeInput(s.takeoffTime || s.startTime || '');
         const landing = toTimeInput(s.landingTime || s.endTime   || '');
         const elapsed = s.elapsedSeconds || 0;
-
         html += '<div style="background:white;border:1px solid #dbeafe;border-radius:0.375rem;padding:0.75rem;margin-bottom:0.5rem;">';
-        if (sessions.length > 1) {
-            html += '<p class="font-medium text-sm" style="margin-bottom:0.5rem;color:#374151;">セッション ' + s.num + '</p>';
-        }
+        if (sessions.length > 1) html += '<p class="font-medium text-sm" style="margin-bottom:0.5rem;color:#374151;">セッション ' + s.num + '</p>';
         html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;align-items:end;">';
-
-        // 離陸時刻
-        html += '<div><label class="label" style="font-size:0.8rem;">離陸時刻</label>'
-              + '<input type="time" id="' + prefix + '_takeoff" class="input" value="' + takeoff + '" '
-              + 'onchange="recalcSessionTime(' + i + ')" /></div>';
-
-        // 着陸時刻
-        html += '<div><label class="label" style="font-size:0.8rem;">着陸時刻</label>'
-              + '<input type="time" id="' + prefix + '_landing" class="input" value="' + landing + '" '
-              + 'onchange="recalcSessionTime(' + i + ')" /></div>';
-
-        // 飛行時間（自動計算・表示のみ）
-        html += '<div><label class="label" style="font-size:0.8rem;">飛行時間</label>'
-              + '<div id="' + prefix + '_duration" style="padding:0.5rem 0.75rem;background:#f3f4f6;border-radius:0.5rem;font-size:1rem;font-weight:600;color:#1e40af;">'
-              + formatMinutes(elapsed) + '</div></div>';
-
+        html += '<div><label class="label" style="font-size:0.8rem;">離陸時刻</label><input type="time" id="' + prefix + '_takeoff" class="input" value="' + takeoff + '" onchange="recalcSessionTime(' + i + ')" /></div>';
+        html += '<div><label class="label" style="font-size:0.8rem;">着陸時刻</label><input type="time" id="' + prefix + '_landing" class="input" value="' + landing + '" onchange="recalcSessionTime(' + i + ')" /></div>';
+        html += '<div><label class="label" style="font-size:0.8rem;">飛行時間</label><div id="' + prefix + '_duration" style="padding:0.5rem 0.75rem;background:#f3f4f6;border-radius:0.5rem;font-size:1rem;font-weight:600;color:#1e40af;">' + formatMinutes(elapsed) + '</div></div>';
         html += '</div></div>';
     });
-
-    html += '<div style="text-align:right;margin-top:0.5rem;">';
-    html += '<span class="font-medium text-sm" style="color:#374151;">総実飛行時間：</span>';
-    html += '<span id="edit-total-time" style="font-size:1.1rem;font-weight:700;color:#1e40af;margin-left:0.5rem;">';
     const currentTotal = sessions.reduce((s, sess) => s + (sess.elapsedSeconds || 0), 0);
-    html += formatMinutes(currentTotal) + '</span>';
-    html += '</div>';
+    html += '<div style="text-align:right;margin-top:0.5rem;"><span class="font-medium text-sm" style="color:#374151;">総実飛行時間：</span><span id="edit-total-time" style="font-size:1.1rem;font-weight:700;color:#1e40af;margin-left:0.5rem;">' + formatMinutes(currentTotal) + '</span></div>';
     html += '</div>';
 
-    html += '<div class="flex gap-2">';
-    html += '<button onclick="saveEdit()" class="btn btn-primary">保存</button>';
-    html += '<button onclick="closeEditModal()" class="btn btn-secondary">キャンセル</button>';
-    html += '</div></div></div>';
+    // ── 飛行前点検
+    const preChecks = log.preflightChecks || {};
+    html += '<div class="accordion-section" style="margin-bottom:1rem;">';
+    html += '<button onclick="toggleAccordion(\'edit-pre-body\',\'edit-pre-arrow\')" class="accordion-header"><span class="font-bold">飛行前点検（' + PREFLIGHT_ITEMS.length + '項目）</span><span id="edit-pre-arrow" class="accordion-arrow">▼ 展開</span></button>';
+    html += '<div id="edit-pre-body" class="accordion-body" style="display:none;">';
+    html += '<table class="check-table"><thead><tr><th class="col-no">No.</th><th class="col-item">点検項目</th><th class="col-check">点検内容</th><th class="col-ok">正常</th></tr></thead><tbody>';
+    PREFLIGHT_ITEMS.forEach((item, i) => {
+        const chk = preChecks[item.id] !== false ? ' checked' : '';
+        html += '<tr><td class="col-no" style="color:#6b7280;">' + (i+1) + '</td><td class="col-item"><strong>' + item.label + '</strong></td><td class="col-check" style="color:#4b5563;font-size:0.85rem;">' + item.desc + '</td><td class="col-ok"><label class="check-normal-label"><input type="checkbox" id="edit_' + item.id + '" class="checkbox"' + chk + ' /> 正常</label></td></tr>';
+    });
+    html += '</tbody></table><div style="margin-top:0.75rem;"><label class="label" style="font-size:0.85rem;">特記事項</label><textarea id="edit-preflight-notes" class="textarea" rows="2">' + (log.preflightNotes||'') + '</textarea></div>';
+    html += '</div></div>';
+
+    // ── 飛行後点検
+    const postChecks = log.postflightChecks || {};
+    html += '<div class="accordion-section" style="margin-bottom:1rem;">';
+    html += '<button onclick="toggleAccordion(\'edit-post-body\',\'edit-post-arrow\')" class="accordion-header"><span class="font-bold">飛行後点検（' + POSTFLIGHT_ITEMS.length + '項目）</span><span id="edit-post-arrow" class="accordion-arrow">▼ 展開</span></button>';
+    html += '<div id="edit-post-body" class="accordion-body" style="display:none;">';
+    html += '<table class="check-table"><thead><tr><th class="col-no">No.</th><th class="col-item">点検項目</th><th class="col-check">点検内容</th><th class="col-ok">正常</th></tr></thead><tbody>';
+    POSTFLIGHT_ITEMS.forEach((item, i) => {
+        const chk = postChecks[item.id] !== false ? ' checked' : '';
+        html += '<tr><td class="col-no" style="color:#6b7280;">' + (i+1) + '</td><td class="col-item"><strong>' + item.label + '</strong></td><td class="col-check" style="color:#4b5563;font-size:0.85rem;">' + item.desc + '</td><td class="col-ok"><label class="check-normal-label"><input type="checkbox" id="edit_' + item.id + '" class="checkbox"' + chk + ' /> 正常</label></td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div style="margin-top:0.75rem;"><label class="label" style="font-size:0.85rem;">特記事項</label><textarea id="edit-postflight-notes" class="textarea" rows="2">' + (log.postflightNotes||'') + '</textarea></div>';
+    html += '<div style="margin-top:0.75rem;"><label class="label" style="font-size:0.85rem;">飛行後レポート</label><input type="text" id="edit-flight-report" class="input" value="' + (log.flightReport||'') + '" /></div>';
+    html += '</div></div>';
+
+    // ── 備考
+    html += '<div class="form-group" style="margin-bottom:1.25rem;"><label class="label">備考</label><textarea id="edit-notes" class="textarea" rows="2">' + (log.notes||'') + '</textarea></div>';
+
+    html += '<div class="flex gap-2"><button onclick="saveEdit()" class="btn btn-primary">保存</button><button onclick="closeEditModal()" class="btn btn-secondary">キャンセル</button></div>';
+    html += '</div></div>';
     return html;
 }
 
@@ -2084,11 +2137,14 @@ function renderLogSummaryCard(log) {
     let html = '<div class="card" style="margin-bottom:0.75rem;">';
 
     // ヘッダー：日付＋時刻、実飛行時間、編集ボタン
+    const dispDate = _pdfFmtDate(log.date);
+    const dispStart = _pdfFmtTime(log.startTime);
+    const dispEnd   = _pdfFmtTime(log.endTime);
     html += '<div class="flex-between" style="margin-bottom:0.5rem;align-items:flex-start;">';
     html += '<div>';
-    html += '<p class="font-bold" style="font-size:1rem;">' + log.date + '</p>';
-    if (log.startTime || log.endTime) {
-        html += '<p class="text-sm text-gray">' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
+    html += '<p class="font-bold" style="font-size:1rem;">' + dispDate + '</p>';
+    if (dispStart || dispEnd) {
+        html += '<p class="text-sm text-gray">' + (dispStart || '-') + ' 〜 ' + (dispEnd || '-') + '</p>';
     }
     html += '</div>';
     html += '<div class="flex gap-2" style="align-items:center;">';
