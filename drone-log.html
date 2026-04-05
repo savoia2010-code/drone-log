@@ -1248,10 +1248,12 @@ function renderFlightLogCard(log) {
     if (log.flightMode) html += '<p style="grid-column:1/-1"><span class="font-medium">飛行形態:</span> ' + log.flightMode + '</p>';
     html += '<p><span class="font-medium">時刻:</span> ' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
     html += '<p><span class="font-medium">気象:</span> ' + log.weather + '</p>';
-    const toAddr = log.takeoffAddress || log.takeoffLocation || '-';
-    const laAddr = log.landingAddress || log.landingLocation || '-';
-    html += '<p><span class="font-medium">離陸場所:</span> ' + toAddr + '</p>';
-    html += '<p><span class="font-medium">着陸場所:</span> ' + laAddr + '</p>';
+    const fmtPlace = (addr, coords) => {
+        if (addr && coords) return addr + '<br><span style="font-size:0.8rem;color:#6b7280;">(' + coords + ')</span>';
+        return addr || coords || '-';
+    };
+    html += '<p><span class="font-medium">離陸場所:</span> ' + fmtPlace(log.takeoffAddress, log.takeoffLocation) + '</p>';
+    html += '<p><span class="font-medium">着陸場所:</span> ' + fmtPlace(log.landingAddress, log.landingLocation) + '</p>';
     html += '</div>';
     if (log.flightReport && log.flightReport !== '正常') {
         html += '<p class="text-sm mt-1" style="color:#92400e;background:#fffbeb;padding:0.375rem 0.75rem;border-radius:0.375rem;">'
