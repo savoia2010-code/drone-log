@@ -43,6 +43,14 @@
         .tab { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 500; border: none; cursor: pointer; white-space: nowrap; font-size: 16px; }
         .tab-active   { background: #2563eb; color: white; }
         .tab-inactive { background: white; color: #374151; }
+        /* アコーディオン */
+        .accordion-section { border: 1px solid #e5e7eb; border-radius: 0.5rem; overflow: hidden; }
+        .accordion-header  { width: 100%; display: flex; justify-content: space-between; align-items: center;
+                             padding: 0.875rem 1rem; background: #f9fafb; border: none; cursor: pointer;
+                             font-size: 16px; text-align: left; }
+        .accordion-header:hover { background: #f3f4f6; }
+        .accordion-arrow   { font-size: 0.8rem; color: #6b7280; white-space: nowrap; }
+        .accordion-body    { padding: 1rem; background: #fff; border-top: 1px solid #e5e7eb; }
         .search-box   { position: relative; margin-bottom: 1rem; }
         .search-input { width: 100%; padding: 0.5rem 1rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 16px; }
         .card      { background: white; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
@@ -198,6 +206,10 @@ let state = {
 
     // PDF出力期間フィルター
     pdfFrom: '', pdfTo: '',
+
+    // 飛行フォームのアコーディオン開閉
+    showFlightModeSection:   false,
+    showPreflightSection:    false,
 };
 
 // ─── ダミーデータ ─────────────────────────────────────────────────────────────
@@ -449,11 +461,12 @@ async function startFlight() {
         else callGAS('addFlightPurpose', purposeCustom);
     }
 
-    // 飛行前点検を収集
+    // 飛行前点検を収集（アコーディオンが閉じていれば全項目正常とみなす）
     const preflightChecks = {};
     PREFLIGHT_ITEMS.forEach(item => {
         const el = document.getElementById(item.id);
-        preflightChecks[item.id] = el ? el.checked : true;
+        // checkbox なら .checked、hidden input（閉じた状態）なら data-checked="true" → true
+        preflightChecks[item.id] = el ? (el.type === 'checkbox' ? el.checked : true) : true;
     });
     const preflightNotesEl = document.getElementById('preflight-notes');
     const preflightNotes = preflightNotesEl ? preflightNotesEl.value.trim() : '';
@@ -1374,25 +1387,19 @@ function submitDrone() {
 function render() {
     let html = '<div class="header"><div class="container header-content">';
     html += '<h1 class="title">無人航空機 飛行日誌・整備記録</h1>';
-    html += '<div class="flex gap-2" style="align-items:center;">';
     if (TEST_MODE) {
+        html += '<div class="flex gap-2" style="align-items:center;">';
         html += '<div class="test-mode-banner">🧪 テストモード</div>';
         html += '<button onclick="clearCache()" class="btn btn-danger btn-small">🗑 リセット</button>';
+        html += '</div>';
     }
-    html += '<span style="font-size:13px;white-space:nowrap;">PDF期間:</span>';
-    html += '<input type="date" value="' + state.pdfFrom + '" onchange="state.pdfFrom=this.value" style="font-size:13px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;">';
-    html += '<span style="font-size:13px;">〜</span>';
-    html += '<input type="date" value="' + state.pdfTo + '" onchange="state.pdfTo=this.value" style="font-size:13px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;">';
-    html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>飛行記録PDF</button>';
-    html += '<button onclick="exportInspectionPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>点検記録PDF</button>';
-    html += '<button onclick="exportData()" class="btn btn-dark"' + (state.loading ? ' disabled' : '') + '>JSON出力</button>';
-    html += '</div></div></div>';
+    html += '</div></div>';
     html += '<div class="container" style="padding-top:1rem;">';
     if (state.error) html += '<div class="error">' + state.error + '</div>';
     if (state.loading) html += '<div class="loading">読み込み中...</div>';
 
     html += '<div class="tabs">';
-    ['flight:飛行日誌','maintenance:整備記録','drones:機体管理','pilots:操縦者管理'].forEach(t => {
+    ['flight:飛行日誌','maintenance:整備記録','manage:管理'].forEach(t => {
         const [key, label] = t.split(':');
         html += '<button onclick="state.activeTab=\'' + key + '\';window.scrollTo({top:0,behavior:\'instant\'});render();" class="tab ' + (state.activeTab===key?'tab-active':'tab-inactive') + '">' + label + '</button>';
     });
@@ -1400,10 +1407,9 @@ function render() {
     html += '<div class="search-box"><input type="text" placeholder="検索..." value="' + state.searchTerm + '" oninput="state.searchTerm=this.value;render();" class="search-input" /></div>';
 
     if (!state.loading) {
-        if (state.activeTab === 'flight')       html += renderFlightTab();
+        if (state.activeTab === 'flight')           html += renderFlightTab();
         else if (state.activeTab === 'maintenance') html += renderMaintenanceTab();
-        else if (state.activeTab === 'drones')  html += renderDronesTab();
-        else if (state.activeTab === 'pilots')  html += renderPilotsTab();
+        else if (state.activeTab === 'manage')      html += renderManageTab();
     }
     html += '</div>';
 
@@ -1519,33 +1525,60 @@ function renderFlightTab() {
         html += '<div class="form-group"><label class="label">着陸場所（住所）</label>';
         html += '<input type="text" id="flight-landing-address" class="input" placeholder="離陸場所と同じ場合は空欄可" /></div>';
         html += '</div>';
-        // 飛行形態（チェックボックス）
-        html += '<div style="border:2px solid #e5e7eb;border-radius:0.5rem;padding:1.25rem;margin-bottom:1.5rem;">';
-        html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態</p>';
-        html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;">';
-        [
-            ['fm_01', '目視内飛行'],
-            ['fm_02', '目視外飛行'],
-            ['fm_03', '夜間飛行'],
-            ['fm_04', '人口集中地区（DID）上空'],
-            ['fm_05', '高度150m以上'],
-            ['fm_06', '催し場所上空'],
-            ['fm_07', '危険物輸送'],
-            ['fm_08', '物件投下'],
-            ['fm_09', '人又は物件から30m未満'],
-        ].forEach(([id, label]) => {
-            html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
-                  + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
-        });
-        html += '</div>';
-        html += '<div style="margin-top:0.75rem;display:flex;align-items:center;gap:0.5rem;">';
-        html += '<label style="white-space:nowrap;font-size:0.9rem;color:#374151;">その他:</label>';
-        html += '<input type="text" id="fm_other_text" class="input" style="flex:1;" placeholder="自由記入" />';
-        html += '</div></div>';
-        html += '<p id="drone-autofill-hint" style="display:none;font-size:0.8rem;color:#059669;margin:-0.75rem 0 1rem;"></p>';
+        html += '<p id="drone-autofill-hint" style="display:none;font-size:0.8rem;color:#059669;margin:-0.5rem 0 1rem;"></p>';
 
-        // 飛行前点検
-        html += renderCheckTable(PREFLIGHT_ITEMS, '飛行前点検', '#eff6ff', '#1e40af', '#bfdbfe', 'preflight-notes');
+        // ── 飛行形態（アコーディオン）──────────────────────────────────────
+        html += '<div class="accordion-section" style="margin-bottom:1rem;">';
+        html += '<button onclick="state.showFlightModeSection=!state.showFlightModeSection;render();" class="accordion-header">';
+        html += '<span class="font-bold">飛行形態（特定飛行）</span>';
+        html += '<span class="accordion-arrow">' + (state.showFlightModeSection ? '▲ 閉じる' : '▼ 展開して選択') + '</span>';
+        html += '</button>';
+        if (state.showFlightModeSection) {
+            html += '<div class="accordion-body">';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;margin-bottom:0.75rem;">';
+            [
+                ['fm_01', '目視内飛行'],
+                ['fm_02', '目視外飛行'],
+                ['fm_03', '夜間飛行'],
+                ['fm_04', '人口集中地区（DID）上空'],
+                ['fm_05', '高度150m以上'],
+                ['fm_06', '催し場所上空'],
+                ['fm_07', '危険物輸送'],
+                ['fm_08', '物件投下'],
+                ['fm_09', '人又は物件から30m未満'],
+            ].forEach(([id, label]) => {
+                html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
+                      + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
+            });
+            html += '</div>';
+            html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
+            html += '<label style="white-space:nowrap;font-size:0.9rem;color:#374151;">その他:</label>';
+            html += '<input type="text" id="fm_other_text" class="input" style="flex:1;" placeholder="自由記入" />';
+            html += '</div></div>';
+        } else {
+            html += '<input type="hidden" id="fm_other_text" value="" />';
+        }
+        html += '</div>';
+
+        // ── 飛行前点検（アコーディオン）────────────────────────────────────
+        html += '<div class="accordion-section" style="margin-bottom:1rem;">';
+        html += '<button onclick="state.showPreflightSection=!state.showPreflightSection;render();" class="accordion-header">';
+        html += '<span class="font-bold">飛行前点検（' + PREFLIGHT_ITEMS.length + '項目）</span>';
+        html += '<span class="accordion-arrow">' + (state.showPreflightSection ? '▲ 閉じる' : '▼ 展開してチェック') + '</span>';
+        html += '</button>';
+        if (state.showPreflightSection) {
+            html += '<div class="accordion-body">';
+            html += renderCheckTable(PREFLIGHT_ITEMS, '', '#eff6ff', '#1e40af', '#bfdbfe', 'preflight-notes');
+            html += '</div>';
+        } else {
+            // 非表示でも ID が存在しないと startFlight() が落ちるため hidden input で代替
+            PREFLIGHT_ITEMS.forEach(item => {
+                html += '<input type="hidden" id="' + item.id + '" data-checked="true" />';
+            });
+            html += '<input type="hidden" id="preflight-notes" value="異常無し" />';
+        }
+        html += '</div>';
+
         html += '<div class="flex" style="align-items:center;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">';
         html += '<input type="checkbox" id="maint-check" class="checkbox"' + (state.maintenanceChecked ? ' checked' : '') + ' onchange="state.maintenanceChecked=this.checked" />';
         html += '<label for="maint-check">飛行後の整備記録を自動作成</label></div>';
@@ -1557,13 +1590,29 @@ function renderFlightTab() {
     html += '<h2 class="font-bold" style="font-size:1.25rem;margin-bottom:1rem;">過去の飛行記録（' + logs.length + '件）</h2>';
     logs.forEach(log => { html += renderFlightLogCard(log); });
     if (!logs.length) html += '<div class="empty-state">飛行記録がありません</div>';
+
+    // PDF・データ出力
+    html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-top:1.5rem;background:#f9fafb;">';
+    html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">出力</p>';
+    html += '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">';
+    html += '<span style="font-size:0.875rem;white-space:nowrap;">期間:</span>';
+    html += '<input type="date" value="' + state.pdfFrom + '" onchange="state.pdfFrom=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
+    html += '<span style="font-size:0.875rem;">〜</span>';
+    html += '<input type="date" value="' + state.pdfTo + '" onchange="state.pdfTo=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
+    html += '</div>';
+    html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
+    html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success">飛行記録 PDF</button>';
+    html += '<button onclick="exportInspectionPDF()" class="btn btn-success">点検記録 PDF</button>';
+    html += '<button onclick="exportData()" class="btn btn-dark">JSON 出力</button>';
+    html += '</div></div>';
+
     return html;
 }
 
 // ─── 点検チェックテーブル ─────────────────────────────────────────────────────
 function renderCheckTable(items, title, bgColor, textColor, borderColor, notesId) {
-    let html = '<div style="border:2px solid ' + borderColor + ';border-radius:0.5rem;padding:1.25rem;margin-bottom:1.5rem;background:' + bgColor + '">';
-    html += '<h4 class="font-bold" style="margin-bottom:1rem;color:' + textColor + ';">' + title + '</h4>';
+    let html = '<div style="border:2px solid ' + borderColor + ';border-radius:0.5rem;padding:1.25rem;margin-bottom:0;background:' + bgColor + '">';
+    if (title) html += '<h4 class="font-bold" style="margin-bottom:1rem;color:' + textColor + ';">' + title + '</h4>';
     html += '<table class="check-table"><thead><tr>';
     html += '<th class="col-no">No.</th><th class="col-item">点検項目</th><th class="col-check">点検内容</th><th class="col-ok">正常</th>';
     html += '</tr></thead><tbody>';
@@ -1968,6 +2017,11 @@ function renderMaintenanceTab() {
     });
     if (!logs.length) html += '<div class="empty-state">整備記録がありません</div>';
     return html;
+}
+
+// ─── 管理タブ（機体＋操縦者） ────────────────────────────────────────────────
+function renderManageTab() {
+    return renderDronesTab() + '<hr style="margin:1.5rem 0;border:none;border-top:2px solid #e5e7eb;">' + renderPilotsTab();
 }
 
 // ─── 機体管理タブ ─────────────────────────────────────────────────────────────
