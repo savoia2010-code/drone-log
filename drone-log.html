@@ -361,6 +361,14 @@ async function autoFetchWeather() {
     _autoFetch.weather = false;
 }
 
+async function nominatimAddress(lat, lon) {
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1&accept-language=ja');
+    const data = await r.json();
+    const a = data.address || {};
+    const parts = [a.prefecture, a.city || a.town || a.village, a.suburb, a.road].filter(Boolean);
+    return parts.join('') || data.display_name || '取得失敗';
+}
+
 async function autoFetchLocation() {
     if (_autoFetch.location) return;
     _autoFetch.location = true;
@@ -369,11 +377,7 @@ async function autoFetchLocation() {
     el.placeholder = '取得中...';
     try {
         const pos = await getPosition();
-        const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + pos.coords.latitude + '&lon=' + pos.coords.longitude + '&format=json&addressdetails=1&accept-language=ja');
-        const data = await r.json();
-        const a = data.address || {};
-        const parts = [a.prefecture, a.city || a.town || a.village, a.suburb, a.road].filter(Boolean);
-        const addr = parts.join('') || data.display_name || '取得失敗';
+        const addr = await nominatimAddress(pos.coords.latitude, pos.coords.longitude);
         const fresh = document.getElementById('maint-location');
         if (fresh && !fresh.value) fresh.value = addr;
     } catch (e) {
@@ -381,6 +385,24 @@ async function autoFetchLocation() {
         if (fresh && !fresh.value) fresh.placeholder = '取得失敗（手動入力）';
     }
     _autoFetch.location = false;
+}
+
+async function autoFetchTakeoffAddress() {
+    if (_autoFetch.takeoff) return;
+    _autoFetch.takeoff = true;
+    const el = document.getElementById('flight-takeoff-address');
+    if (!el || el.value) { _autoFetch.takeoff = false; return; }
+    el.placeholder = '取得中...';
+    try {
+        const pos = await getPosition();
+        const addr = await nominatimAddress(pos.coords.latitude, pos.coords.longitude);
+        const fresh = document.getElementById('flight-takeoff-address');
+        if (fresh && !fresh.value) fresh.value = addr;
+    } catch (e) {
+        const fresh = document.getElementById('flight-takeoff-address');
+        if (fresh && !fresh.value) fresh.placeholder = '取得失敗（手動入力）';
+    }
+    _autoFetch.takeoff = false;
 }
 
 // ─── 飛行記録：開始 ───────────────────────────────────────────────────────────
@@ -856,7 +878,8 @@ async function addMaintenanceLog(log) {
 // ─── 機体ごとの前回選択を自動入力 ────────────────────────────────────────────
 function getLastFlightForDrone(droneId) {
     // flightLogs は新しい順なので先頭が最新
-    return state.flightLogs.find(l => l.droneId === droneId) || null;
+    const sid = String(droneId);
+    return state.flightLogs.find(l => String(l.droneId) === sid) || null;
 }
 
 function onDroneSelect(droneId) {
@@ -866,7 +889,7 @@ function onDroneSelect(droneId) {
 
     // 操縦者
     const pilotSel = document.getElementById('flight-pilot-input');
-    if (pilotSel && last.pilotId) pilotSel.value = last.pilotId;
+    if (pilotSel && last.pilotId) pilotSel.value = String(last.pilotId);
 
     // 飛行目的
     const purposeSel = document.getElementById('flight-purpose-select');
@@ -895,8 +918,8 @@ function filterLogs(logs) {
     if (!state.searchTerm) return logs;
     return logs.filter(l => JSON.stringify(l).toLowerCase().includes(state.searchTerm.toLowerCase()));
 }
-function getPilotName(id) { const p = state.pilots.find(p => p.id === id); return p ? p.name : '不明'; }
-function getDroneName(id) { const d = state.drones.find(d => d.id === id); return d ? d.manufacturer + ' ' + d.model : '不明'; }
+function getPilotName(id) { const sid = String(id); const p = state.pilots.find(p => String(p.id) === sid); return p ? p.name : '不明'; }
+function getDroneName(id) { const sid = String(id); const d = state.drones.find(d => String(d.id) === sid); return d ? d.manufacturer + ' ' + d.model : '不明'; }
 function calcFlightTime(secs) { return formatMinutes(secs); }
 function secsFromStartEnd(start, end) {
     if (!start || !end) return 0;
@@ -1035,6 +1058,7 @@ function render() {
     if (!TEST_MODE) {
         if (state.activeTab === 'flight' && !state.isRecording && !state.loading) {
             setTimeout(autoFetchWeather, 0);
+            setTimeout(autoFetchTakeoffAddress, 0);
         }
         if (state.activeTab === 'maintenance' && state.showMaintenanceForm && !state.loading) {
             setTimeout(autoFetchLocation, 0);
