@@ -1615,18 +1615,25 @@ function renderFlightTab() {
 
     } else {
         // ── 飛行開始フォーム ──────────────────────────
+        // 前回フライトから初期値を取得
+        const lastLog = state.flightLogs[0] || null;
+        const lastDroneId  = lastLog ? String(lastLog.droneId)  : '';
+        const lastPilotId  = lastLog ? String(lastLog.pilotId)  : '';
+        const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
+        const lastFmModes  = lastLog && lastLog.flightMode ? lastLog.flightMode.split('、') : [];
+
         html += '<h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;">新しい飛行を記録</h3>';
         html += '<div class="grid grid-2" style="max-width:800px;margin:0 auto 1.5rem;">';
         html += '<div class="form-group"><label class="label">機体</label><select id="flight-drone-select" class="select" onchange="onDroneSelect(this.value)"><option value="">選択してください</option>';
-        state.drones.forEach(d => { html += '<option value="' + d.id + '">' + d.manufacturer + ' ' + d.model + '</option>'; });
+        state.drones.forEach(d => { html += '<option value="' + d.id + '"' + (String(d.id) === lastDroneId ? ' selected' : '') + '>' + d.manufacturer + ' ' + d.model + '</option>'; });
         html += '</select></div>';
         html += '<div class="form-group"><label class="label">操縦者</label><select id="flight-pilot-input" class="select"><option value="">選択してください</option>';
-        state.pilots.forEach(p => { html += '<option value="' + p.id + '">' + p.name + '</option>'; });
+        state.pilots.forEach(p => { html += '<option value="' + p.id + '"' + (String(p.id) === lastPilotId ? ' selected' : '') + '>' + p.name + '</option>'; });
         html += '</select></div>';
         html += '<div class="form-group"><label class="label">飛行目的</label>';
         html += '<select id="flight-purpose-select" class="select" onchange="document.getElementById(\'flight-purpose-custom\').style.display=this.value===\'その他\'?\'block\':\'none\';">';
         html += '<option value="">選択してください</option>';
-        state.flightPurposes.forEach(p => { html += '<option>' + p + '</option>'; });
+        state.flightPurposes.forEach(p => { html += '<option' + (p === lastPurpose ? ' selected' : '') + '>' + p + '</option>'; });
         html += '<option value="その他">その他（新規入力）</option>';
         html += '</select><input type="text" id="flight-purpose-custom" class="input" placeholder="飛行目的を入力" style="display:none;margin-top:0.5rem;" /></div>';
         const weatherVal = TEST_MODE ? dummyWeather() : '';
@@ -1656,7 +1663,7 @@ function renderFlightTab() {
             ['fm_09', '人又は物件から30m未満'],
         ].forEach(([id, label]) => {
             html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
-                  + '<input type="checkbox" id="' + id + '" class="checkbox" /> ' + label + '</label>';
+                  + '<input type="checkbox" id="' + id + '" class="checkbox"' + (lastFmModes.includes(label) ? ' checked' : '') + ' /> ' + label + '</label>';
         });
         html += '</div>';
         html += '<div style="display:flex;align-items:center;gap:0.5rem;">';
@@ -1682,21 +1689,6 @@ function renderFlightTab() {
         html += '<button onclick="startFlight()" class="btn btn-start">▶ 飛行開始</button>';
     }
     html += '</div>';
-
-    // PDF・データ出力
-    html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-top:1.5rem;background:#f9fafb;">';
-    html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">出力</p>';
-    html += '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">';
-    html += '<span style="font-size:0.875rem;white-space:nowrap;">期間:</span>';
-    html += '<input type="date" value="' + state.pdfFrom + '" onchange="state.pdfFrom=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
-    html += '<span style="font-size:0.875rem;">〜</span>';
-    html += '<input type="date" value="' + state.pdfTo + '" onchange="state.pdfTo=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
-    html += '</div>';
-    html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
-    html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success">飛行記録 PDF</button>';
-    html += '<button onclick="exportInspectionPDF()" class="btn btn-success">点検記録 PDF</button>';
-    html += '<button onclick="exportData()" class="btn btn-dark">JSON 出力</button>';
-    html += '</div></div>';
 
     return html;
 }
@@ -2127,6 +2119,22 @@ function renderLogsTab() {
 
     html += '<p class="text-sm text-gray" style="margin-bottom:1rem;">' + logs.length + '件</p>';
     logs.forEach(log => { html += renderLogSummaryCard(log); });
+
+    // PDF・データ出力
+    html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-top:1.5rem;background:#f9fafb;">';
+    html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">出力</p>';
+    html += '<div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">';
+    html += '<span style="font-size:0.875rem;white-space:nowrap;">期間:</span>';
+    html += '<input type="date" value="' + state.pdfFrom + '" onchange="state.pdfFrom=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
+    html += '<span style="font-size:0.875rem;">〜</span>';
+    html += '<input type="date" value="' + state.pdfTo + '" onchange="state.pdfTo=this.value" style="font-size:0.875rem;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;">';
+    html += '</div>';
+    html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">';
+    html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success">飛行記録 PDF</button>';
+    html += '<button onclick="exportInspectionPDF()" class="btn btn-success">点検記録 PDF</button>';
+    html += '<button onclick="exportData()" class="btn btn-dark">JSON 出力</button>';
+    html += '</div></div>';
+
     return html;
 }
 
