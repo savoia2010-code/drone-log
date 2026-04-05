@@ -195,6 +195,9 @@ let state = {
     // 整備記録編集モーダル
     showMaintenanceEditModal: false,
     editingMaintenance:       null,
+
+    // PDF出力期間フィルター
+    pdfFrom: '', pdfTo: '',
 };
 
 // ─── ダミーデータ ─────────────────────────────────────────────────────────────
@@ -283,6 +286,7 @@ function handleLocalStorage(action, data) {
             return { success: true };
         }
         case 'getWeather': return { text: dummyWeather() };
+        case 'getAddress': return { address: DUMMY_FLIGHT_LOCATION };
         default: throw new Error('Invalid action');
     }
 }
@@ -360,13 +364,80 @@ async function autoFetchWeather() {
     _autoFetch.weather = false;
 }
 
-async function nominatimAddress(lat, lon) {
-    const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1&accept-language=ja');
+async function reverseGeocodeAddress(lat, lon) {
+    // GAS経由でGoogle Maps逆ジオコーディング（番地まで取得可能）
+    try {
+        const result = await callGAS('getAddress', { lat, lon });
+        console.log('[reverseGeocodeAddress] GAS response:', JSON.stringify(result));
+        if (result.address) return result.address;
+        console.warn('[reverseGeocodeAddress] GAS returned empty address, falling back');
+    } catch(e) {
+        console.warn('[reverseGeocodeAddress] GAS failed, falling back to Nominatim:', e.message);
+    }
+    // フォールバック: Nominatim（OSM）
+    console.log('[reverseGeocodeAddress] Calling Nominatim...');
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lon + '&format=json&addressdetails=1&zoom=18&accept-language=ja');
     const data = await r.json();
+    console.log('[reverseGeocodeAddress] Nominatim raw address fields:', JSON.stringify(data.address));
     const a = data.address || {};
-    const city = a.city || a.town || a.village || a.county || '';
-    const parts = [a.prefecture, city, a.suburb || a.neighbourhood || '', a.road || '', a.house_number || ''].filter(Boolean);
+    const city     = a.city || a.town || a.village || a.county || '';
+    const district = a.city_district || '';
+    const suburb   = a.quarter || a.suburb || a.neighbourhood || '';
+    const parts = [a.prefecture, city, district, suburb, a.road || '', a.house_number || ''].filter(Boolean);
     return parts.join('') || data.display_name || '取得失敗';
+}
+
+// ─── 住所取得診断（開発・調査用）─────────────────────────────────────────────
+async function diagAddress() {
+    const log = [];
+    const append = msg => { log.push(msg); console.log('[DIAG]', msg); };
+    const el = document.getElementById('diag-result');
+    if (el) el.textContent = '診断中...';
+
+    // ① GPS
+    append('① GPS取得開始');
+    let coords;
+    try {
+        const pos = await new Promise((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 10000 })
+        );
+        coords = { lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy };
+        append('① GPS OK: lat=' + coords.lat.toFixed(6) + ' lon=' + coords.lon.toFixed(6) + ' 精度±' + Math.round(coords.acc) + 'm');
+    } catch(e) {
+        append('① GPS NG: ' + e.message);
+        if (el) el.textContent = log.join('\n');
+        return;
+    }
+
+    // ② GAS getAddress
+    append('② GAS getAddress 呼び出し中...');
+    try {
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getAddress', data: { lat: coords.lat, lon: coords.lon } })
+        });
+        const text = await res.text();
+        append('② GAS raw response: ' + text.slice(0, 300));
+        const json = JSON.parse(text);
+        append('② GAS parsed: address="' + (json.address || '') + '" error="' + (json.error || '') + '"');
+    } catch(e) {
+        append('② GAS NG: ' + e.message);
+    }
+
+    // ③ Nominatim
+    append('③ Nominatim 呼び出し中...');
+    try {
+        const url = 'https://nominatim.openstreetmap.org/reverse?lat=' + coords.lat + '&lon=' + coords.lon + '&format=json&addressdetails=1&zoom=18&accept-language=ja';
+        const res = await fetch(url);
+        const json = await res.json();
+        append('③ Nominatim display_name: ' + (json.display_name || ''));
+        append('③ Nominatim address fields: ' + JSON.stringify(json.address || {}));
+    } catch(e) {
+        append('③ Nominatim NG: ' + e.message);
+    }
+
+    if (el) el.textContent = log.join('\n');
+    alert(log.join('\n'));
 }
 
 async function autoFetchLocation() {
@@ -377,7 +448,7 @@ async function autoFetchLocation() {
     el.placeholder = '取得中...';
     try {
         const pos = await getPosition();
-        const addr = await nominatimAddress(pos.coords.latitude, pos.coords.longitude);
+        const addr = await reverseGeocodeAddress(pos.coords.latitude, pos.coords.longitude);
         const fresh = document.getElementById('maint-location');
         if (fresh && !fresh.value) fresh.value = addr;
     } catch (e) {
@@ -395,7 +466,7 @@ async function autoFetchTakeoffAddress() {
     el.placeholder = '取得中...';
     try {
         const pos = await getPosition();
-        const addr = await nominatimAddress(pos.coords.latitude, pos.coords.longitude);
+        const addr = await reverseGeocodeAddress(pos.coords.latitude, pos.coords.longitude);
         const fresh = document.getElementById('flight-takeoff-address');
         if (fresh && !fresh.value) fresh.value = addr;
     } catch (e) {
@@ -943,207 +1014,336 @@ function exportData() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = 'drone-logs-' + new Date().toISOString().split('T')[0] + '.json'; a.click();
 }
-function exportPDF() {
+// ─── PDF共通ヘルパー ─────────────────────────────────────────────────────────
+function _pdfEsc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _pdfParseChecks(c) { return (typeof c === 'string' ? JSON.parse(c || '{}') : (c || {})); }
+function _pdfSecsToHHMM(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+}
+function _pdfFmtYMD(d) { return String(d||'').replace(/-/g,''); }
+// 機体情報ヘッダー行HTML（様式1・様式2共通）
+function _pdfMachineRow(drone) {
+    const e = _pdfEsc;
+    return '<table class="mach-tbl"><tbody><tr>'
+        + '<th>登録記号<br>REGISTRATION<br>MARK</th><td>' + e(drone.registrationNumber||'') + '</td>'
+        + '<th>種類<br>TYPE</th><td>回転翼航空機<br>（マルチローター）</td>'
+        + '<th>型式<br>MODEL</th><td>' + e(drone.model||'') + '</td>'
+        + '<th>型式認証書番号<br>TYPE CERT. NO.</th><td>' + e(drone.typeCertNumber||'') + '</td>'
+        + '<th>機体認証区分<br>CLASS</th><td>' + e(drone.certClass||'') + '</td>'
+        + '<th>機体認証書番号<br>AIRWORTHINESS CERT. NO.</th><td>' + e(drone.certNumber||'') + '</td>'
+        + '<th>製造者<br>MANUFACTURER</th><td>' + e(drone.manufacturer||'') + '</td>'
+        + '<th>製造番号<br>SERIAL NO.</th><td>' + e(drone.serialNumber||'') + '</td>'
+        + '</tr></tbody></table>';
+}
+
+// ─── 様式1：飛行記録 JOURNEY LOG OF UAS ────────────────────────────────────
+function _pdfFilteredLogs() {
+    const from = state.pdfFrom;
+    const to   = state.pdfTo;
+    return state.flightLogs.filter(l => {
+        if (from && l.date < from) return false;
+        if (to   && l.date > to)   return false;
+        return true;
+    });
+}
+
+function exportJourneyLogPDF() {
     const w = window.open('', '_blank');
     if (!w) { alert('ポップアップがブロックされています。許可してから再試行してください。'); return; }
-
-    const logs = [...state.flightLogs].reverse(); // 古い順（日誌として自然な順序）
-    const today = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
-    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const fmtPlace = (addr, coords) => {
-        if (addr && coords) return esc(addr) + '<br><small>（' + esc(coords) + '）</small>';
-        return esc(addr || coords || '―');
-    };
-    const parseChecks = c => (typeof c === 'string' ? JSON.parse(c || '{}') : (c || {}));
-
-    // 点検テーブル生成（各項目を個別に○/×表示）
-    const buildCheckTable = (items, checks, notes, title) => {
-        let t = '<div class="check-section"><div class="check-title">' + title + '</div>';
-        t += '<table class="ctbl"><thead><tr><th style="width:6mm">No.</th><th>点検項目</th><th>点検内容</th><th style="width:10mm;text-align:center;">結果</th><th>特記事項</th></tr></thead><tbody>';
-        items.forEach((item, i) => {
-            const ok = checks[item.id] !== false;
-            t += '<tr' + (ok ? '' : ' class="ng-row"') + '>';
-            t += '<td style="text-align:center;">' + (i + 1) + '</td>';
-            t += '<td>' + esc(item.label) + '</td>';
-            t += '<td class="desc">' + esc(item.desc) + '</td>';
-            t += '<td style="text-align:center;font-size:11pt;font-weight:700;color:' + (ok ? '#16a34a' : '#dc2626') + ';">' + (ok ? '○' : '×') + '</td>';
-            t += '<td class="notes-cell">' + (ok ? '' : '要確認') + '</td>';
-            t += '</tr>';
-        });
-        t += '</tbody></table>';
-        if (notes) t += '<div class="check-notes">特記事項: ' + esc(notes) + '</div>';
-        t += '</div>';
-        return t;
-    };
+    const e = _pdfEsc;
+    const ROWS_PER_PAGE = 14;
+    const filteredLogs = _pdfFilteredLogs();
 
     let body = '';
 
-    // ══ 表紙 ══════════════════════════════════════════════════════════════════
-    body += '<div class="cover">';
-    body += '<div class="cover-title">無人航空機 飛行日誌</div>';
-    body += '<div class="cover-sub">（航空法第132条の87に基づく飛行日誌）</div>';
-    body += '<table class="cover-table">';
-    body += '<tr><th>出力日</th><td>' + today + '</td><th>飛行記録件数</th><td>' + logs.length + '件</td></tr>';
-    if (state.drones.length) {
-        state.drones.forEach(d => {
-            const sid = String(d.id);
-            const cnt = state.flightLogs.filter(l => String(l.droneId) === sid).length;
-            const secs = state.flightLogs.filter(l => String(l.droneId) === sid).reduce((s, l) => s + (l.totalFlightSecs || 0), 0);
-            body += '<tr><th>機体</th><td>' + esc(d.manufacturer + ' ' + d.model) + '</td><th>登録記号</th><td>' + esc(d.registrationNumber || '―') + '</td></tr>';
-            body += '<tr><th>製造番号</th><td>' + esc(d.serialNumber) + '</td><th>累計飛行時間</th><td>' + calcFlightTime(secs + (d.preRegistrationMins || 0) * 60) + '（' + cnt + '回）</td></tr>';
-        });
-    }
-    if (state.pilots.length) {
-        state.pilots.forEach(p => {
-            body += '<tr><th>操縦者</th><td>' + esc(p.name) + '</td><th>技能証明番号</th><td>' + esc(p.licenseNumber || '―') + '</td></tr>';
-        });
-    }
-    body += '</table></div>';
+    // 機体ごとにページグループを作成
+    const drones = state.drones.length ? state.drones : [{}];
+    drones.forEach(drone => {
+        const sid = String(drone.id || '');
+        const droneLogs = state.drones.length
+            ? [...filteredLogs].filter(l => String(l.droneId) === sid).reverse()
+            : [...filteredLogs].reverse();
 
-    // ══ 飛行記録（1件1ページ構成） ════════════════════════════════════════════
-    logs.forEach((l, i) => {
-        const secs    = l.totalFlightSecs || secsFromStartEnd(l.startTime, l.endTime);
-        const sessions = l.sessions || [];
-        const pfChecks = parseChecks(l.preflightChecks);
-        const poChecks = parseChecks(l.postflightChecks);
-        const drone    = state.drones.find(d => String(d.id) === String(l.droneId)) || {};
-        const pilot    = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
-        const hasDefect = (l.flightReport && l.flightReport !== '正常') ||
-                          PREFLIGHT_ITEMS.some(item => pfChecks[item.id] === false) ||
-                          POSTFLIGHT_ITEMS.some(item => poChecks[item.id] === false);
+        // 繰越行（アプリ導入前の飛行時間）
+        const carryoverMins = drone.preRegistrationMins || 0;
+        const carryoverSecs = carryoverMins * 60;
 
-        body += '<div class="flight-record">';
-
-        // ─ ヘッダー ─────────────────────────────────────────────────────────
-        body += '<div class="rec-hdr">';
-        body += '<span class="rec-seq">第 ' + (i + 1) + ' 回</span>';
-        body += '<span class="rec-date">' + esc(l.date) + '</span>';
-        body += '<span class="rec-drone">' + esc(drone.manufacturer || '') + ' ' + esc(drone.model || '') + '</span>';
-        body += '<span class="rec-reg">登録記号: ' + esc(drone.registrationNumber || '―') + '</span>';
-        body += (hasDefect ? '<span class="defect-badge">⚠ 要確認あり</span>' : '<span class="ok-badge">正常</span>');
-        body += '</div>';
-
-        // ─ 基本情報 ─────────────────────────────────────────────────────────
-        body += '<table class="info-tbl"><tbody>';
-        body += '<tr>';
-        body += '<th>操縦者氏名</th><td>' + esc(pilot.name || '―') + '</td>';
-        body += '<th>技能証明番号</th><td>' + esc(pilot.licenseNumber || '―') + '</td>';
-        body += '<th>証明種類</th><td>' + esc(pilot.licenseType || '―') + '</td>';
-        body += '</tr><tr>';
-        body += '<th>飛行年月日</th><td>' + esc(l.date) + '</td>';
-        body += '<th>飛行開始</th><td>' + esc(l.startTime || '―') + '</td>';
-        body += '<th>飛行終了</th><td>' + esc(l.endTime || '―') + '</td>';
-        body += '</tr><tr>';
-        body += '<th>実飛行時間</th><td>' + esc(calcFlightTime(secs)) + '</td>';
-        body += '<th>飛行目的</th><td colspan="3">' + esc(l.purpose || '―') + '</td>';
-        body += '</tr><tr>';
-        body += '<th>離陸場所</th><td colspan="2">' + fmtPlace(l.takeoffAddress, l.takeoffLocation) + '</td>';
-        body += '<th>着陸場所</th><td colspan="2">' + fmtPlace(l.landingAddress, l.landingLocation) + '</td>';
-        body += '</tr><tr>';
-        body += '<th>気象状況</th><td colspan="5">' + esc(l.weather || '―') + '</td>';
-        body += '</tr><tr>';
-        body += '<th>飛行形態<br>（特定飛行）</th><td colspan="5">' + esc(l.flightMode || '特定飛行なし') + '</td>';
-        body += '</tr>';
-        if (l.notes) {
-            body += '<tr><th>備考</th><td colspan="5">' + esc(l.notes) + '</td></tr>';
+        // 全行リスト（繰越 + フライト）
+        const rows = [];
+        if (carryoverMins > 0) {
+            rows.push({ isCarryover: true, secs: carryoverSecs });
         }
-        body += '</tbody></table>';
+        droneLogs.forEach(l => {
+            const secs = l.totalFlightSecs || secsFromStartEnd(l.startTime, l.endTime);
+            rows.push({ isCarryover: false, log: l, secs });
+        });
 
-        // ─ セッション詳細（複数セッションの場合）────────────────────────────
-        if (sessions.length > 1) {
-            body += '<table class="session-tbl"><thead><tr><th>セッション</th><th>離陸時刻</th><th>着陸時刻</th><th>飛行時間</th><th>離陸地点（座標）</th><th>着陸地点（座標）</th></tr></thead><tbody>';
-            sessions.forEach(s => {
-                body += '<tr><td style="text-align:center;">S' + s.num + '</td><td>' + esc(s.takeoffTime || '―') + '</td><td>' + esc(s.landingTime || '―') + '</td><td>' + calcFlightTime(s.elapsedSeconds) + '</td><td class="desc">' + esc(s.takeoffCoords || '―') + '</td><td class="desc">' + esc(s.landingCoords || '―') + '</td></tr>';
+        // 累計計算
+        let cumSecs = 0;
+        rows.forEach(r => { cumSecs += r.secs; r.cumSecs = cumSecs; });
+
+        // ページ分割
+        const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+        for (let pg = 0; pg < totalPages; pg++) {
+            const pageRows = rows.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
+            const isLastDronePage = pg === totalPages - 1;
+
+            body += '<div class="page">';
+            // タイトル
+            body += '<div class="form-title">';
+            body += '<span class="form-num">（様式１）飛行記録</span>';
+            body += '<span class="form-ja">無人航空機の飛行記録</span>';
+            body += '<span class="form-en">JOURNEY LOG OF UAS</span>';
+            body += '<span class="form-nr">（NR.' + (pg + 1) + '）</span>';
+            body += '</div>';
+
+            // 機体情報
+            body += _pdfMachineRow(drone);
+
+            // 飛行記録テーブル
+            body += '<table class="log-tbl"><thead><tr>'
+                + '<th class="col-date">飛行年月日<br>DATE</th>'
+                + '<th class="col-pilot">飛行させた者の氏名<br>PILOT IN COMMAND</th>'
+                + '<th class="col-summary">飛行概要<br>FLIGHT SUMMARY</th>'
+                + '<th class="col-from">離陸場所<br>FROM</th>'
+                + '<th class="col-to">着陸場所<br>TO</th>'
+                + '<th class="col-time">離陸時刻<br>OFF TIME</th>'
+                + '<th class="col-time">着陸時刻<br>ON TIME</th>'
+                + '<th class="col-dur">飛行時間<br>HH:MM</th>'
+                + '<th class="col-total">総飛行時間<br>HH:MM</th>'
+                + '<th class="col-safety">飛行の安全に影響のあった事項<br>SAFETY MATTERS</th>'
+                + '</tr></thead><tbody>';
+
+            pageRows.forEach(r => {
+                if (r.isCarryover) {
+                    body += '<tr class="carryover-row">'
+                        + '<td colspan="7" style="text-align:right;font-size:7pt;color:#555;">繰越（アプリ導入前）BROUGHT FORWARD</td>'
+                        + '<td class="tc">' + _pdfSecsToHHMM(r.secs) + '</td>'
+                        + '<td class="tc">' + _pdfSecsToHHMM(r.cumSecs) + '</td>'
+                        + '<td></td>'
+                        + '</tr>';
+                } else {
+                    const l = r.log;
+                    const pilot = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
+                    const sessions = l.sessions || [];
+                    const from = l.takeoffAddress || (sessions[0] && sessions[0].takeoffCoords) || '';
+                    const to   = l.landingAddress || (sessions[sessions.length-1] && sessions[sessions.length-1].landingCoords) || '';
+                    const offTime = sessions[0] ? (sessions[0].takeoffTime || l.startTime || '') : (l.startTime || '');
+                    const onTime  = sessions[sessions.length-1] ? (sessions[sessions.length-1].landingTime || l.endTime || '') : (l.endTime || '');
+                    const safety = l.flightReport && l.flightReport !== '正常' ? l.flightReport : '';
+                    body += '<tr' + (safety ? ' class="safety-row"' : '') + '>'
+                        + '<td class="tc">' + e(_pdfFmtYMD(l.date)) + '</td>'
+                        + '<td>' + e(pilot.name || '') + '</td>'
+                        + '<td>' + e(l.purpose || '') + '</td>'
+                        + '<td class="place">' + e(from) + '</td>'
+                        + '<td class="place">' + e(to) + '</td>'
+                        + '<td class="tc">' + e(offTime) + '</td>'
+                        + '<td class="tc">' + e(onTime) + '</td>'
+                        + '<td class="tc">' + _pdfSecsToHHMM(r.secs) + '</td>'
+                        + '<td class="tc">' + _pdfSecsToHHMM(r.cumSecs) + '</td>'
+                        + '<td>' + e(safety) + '</td>'
+                        + '</tr>';
+                }
             });
+
+            // 空白行で14行を埋める
+            const emptyRows = ROWS_PER_PAGE - pageRows.length;
+            for (let i = 0; i < emptyRows; i++) {
+                body += '<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+            }
             body += '</tbody></table>';
+
+            // 最終ページにREPORTセクション
+            if (isLastDronePage) {
+                body += '<table class="report-tbl"><tbody>';
+                body += '<tr><td rowspan="5" class="report-label">REPORT</td>'
+                    + '<th>SQUAWK DATE</th><th>FLIGHT SQUAWK</th><th>ACTION DATE</th><th>CORRECTIVE ACTION</th><th>CONFIRMER</th></tr>';
+                for (let i = 0; i < 5; i++) {
+                    body += '<tr><td></td><td></td><td></td><td></td><td></td></tr>';
+                }
+                body += '</tbody></table>';
+            }
+
+            body += '</div>'; // .page
         }
 
-        // ─ 飛行前点検（各項目個別）──────────────────────────────────────────
-        body += buildCheckTable(PREFLIGHT_ITEMS, pfChecks, l.preflightNotes, '飛行前点検');
-
-        // ─ 飛行後点検（各項目個別）──────────────────────────────────────────
-        body += buildCheckTable(POSTFLIGHT_ITEMS, poChecks, l.postflightNotes, '飛行後点検');
-
-        // ─ 不具合・レポート ─────────────────────────────────────────────────
-        const report = l.flightReport || '正常';
-        body += '<div class="report-section' + (report !== '正常' ? ' report-ng' : '') + '">';
-        body += '<span class="report-lbl">不具合・事故等の情報:</span> ' + esc(report);
-        body += '</div>';
-
-        body += '</div>'; // .flight-record
+        if (rows.length === 0) {
+            body += '<div class="page">';
+            body += '<div class="form-title">';
+            body += '<span class="form-num">（様式１）飛行記録</span>';
+            body += '<span class="form-ja">無人航空機の飛行記録</span>';
+            body += '<span class="form-en">JOURNEY LOG OF UAS</span>';
+            body += '<span class="form-nr">（NR.1）</span>';
+            body += '</div>';
+            body += _pdfMachineRow(drone);
+            body += '<p style="text-align:center;color:#888;margin:8mm 0;">飛行記録がありません</p>';
+            body += '</div>';
+        }
     });
 
-    if (!logs.length) body += '<p style="color:#888;margin:8mm 0;text-align:center;">飛行記録がありません</p>';
+    const css = `
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
+@page{size:A4 landscape;margin:10mm 12mm 12mm;}
+.print-btn{display:block;margin:6px auto 10px;padding:6px 24px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+@media print{.print-btn{display:none;}.page{page-break-after:always;}}
+.page{width:100%;}
+/* タイトル行 */
+.form-title{display:flex;align-items:baseline;gap:4mm;border-bottom:1pt solid #000;padding-bottom:1mm;margin-bottom:1.5mm;}
+.form-num{font-size:8pt;font-weight:700;}
+.form-ja{font-size:10pt;font-weight:900;}
+.form-en{font-size:8pt;font-weight:700;flex:1;}
+.form-nr{font-size:8pt;}
+/* 機体情報テーブル */
+.mach-tbl{width:100%;border-collapse:collapse;font-size:6.5pt;margin-bottom:1.5mm;}
+.mach-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;white-space:nowrap;}
+.mach-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;}
+/* 飛行記録テーブル */
+.log-tbl{width:100%;border-collapse:collapse;font-size:7pt;margin-bottom:1.5mm;}
+.log-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;white-space:nowrap;}
+.log-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;vertical-align:middle;height:8mm;}
+.log-tbl .tc{text-align:center;}
+.log-tbl .place{font-size:6.5pt;}
+.col-date{width:13mm;} .col-pilot{width:18mm;} .col-summary{width:22mm;}
+.col-from{width:30mm;} .col-to{width:30mm;}
+.col-time{width:12mm;} .col-dur{width:12mm;} .col-total{width:13mm;} .col-safety{width:auto;}
+.carryover-row td{background:#f5f5f5;font-size:6.5pt;}
+.safety-row{background:#fff0f0;}
+/* REPORTテーブル */
+.report-tbl{width:100%;border-collapse:collapse;font-size:7pt;}
+.report-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;}
+.report-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;height:7mm;}
+.report-label{text-align:center;font-weight:900;font-size:9pt;writing-mode:vertical-rl;width:8mm;background:#e8e8e8;}
+`;
+    const periodLabel = (state.pdfFrom || state.pdfTo)
+        ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
+    const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
+        + '<button class="print-btn" onclick="window.print()">🖨 印刷 / PDFで保存</button>'
+        + body + '</body></html>';
+    w.document.write(html);
+    w.document.close();
+}
 
-    // ══ 整備記録 ══════════════════════════════════════════════════════════════
-    if (state.maintenanceLogs.length) {
-        body += '<div class="maint-section"><div class="section-h2">整備記録（' + state.maintenanceLogs.length + '件）</div>';
-        body += '<table><thead><tr><th>整備日</th><th>機体</th><th>整備種別</th><th>作業者</th><th>整備場所</th><th>整備内容</th><th>次回整備予定日</th></tr></thead><tbody>';
-        [...state.maintenanceLogs].reverse().forEach(m => {
-            body += '<tr><td>' + esc(m.date) + '</td><td>' + esc(getDroneName(m.droneId)) + '</td><td>' + esc(m.type) + '</td><td>' + esc(m.technician) + '</td><td>' + esc(m.maintenanceLocation || '―') + '</td><td>' + esc(m.description) + '</td><td>' + esc(m.nextDate || '―') + '</td></tr>';
+// ─── 様式2：日常点検記録 DAILY INSPECTION RECORD OF UAS ────────────────────
+function exportInspectionPDF() {
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされています。許可してから再試行してください。'); return; }
+    const e = _pdfEsc;
+
+    const INSPECTION_ITEMS_EN = [
+        'UAS GENERAL', 'PROPELLER(S)', 'FRAME', 'COMMUNICATION SYSTEM',
+        'PROPULSION SYSTEM', 'POWER SYSTEM', 'AUTOMATIC CONTROL SYSTEM',
+        'FLIGHT CONTROL SYSTEM', 'BATTERY / FUEL'
+    ];
+
+    const logs = [..._pdfFilteredLogs()].reverse(); // 古い順（期間フィルタ適用）
+    let body = '';
+
+    logs.forEach((l, idx) => {
+        const drone  = state.drones.find(d => String(d.id) === String(l.droneId)) || {};
+        const pilot  = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
+        const pfChecks = _pdfParseChecks(l.preflightChecks);
+
+        body += '<div class="page">';
+
+        // タイトル
+        body += '<div class="form-title">';
+        body += '<span class="form-num">（様式２）日常点検記録</span>';
+        body += '<span class="form-ja">無人航空機の日常点検記録</span>';
+        body += '<span class="form-en">DAILY INSPECTION RECORD OF UAS</span>';
+        body += '<span class="form-nr">（NR.' + (idx + 1) + '）</span>';
+        body += '</div>';
+
+        // 機体情報
+        body += _pdfMachineRow(drone);
+
+        // 点検テーブル
+        body += '<table class="insp-tbl"><thead><tr>'
+            + '<th style="width:8mm">No.</th>'
+            + '<th style="width:40mm">点検項目<br>INSPECTION ITEMS</th>'
+            + '<th style="width:20mm">点検内容</th>'
+            + '<th style="width:15mm">結果<br>RESULT</th>'
+            + '<th>備考<br>REMARKS</th>'
+            + '</tr></thead><tbody>';
+
+        PREFLIGHT_ITEMS.slice(0, 9).forEach((item, i) => {
+            const ok = pfChecks[item.id] !== false;
+            body += '<tr>'
+                + '<td class="tc">' + (i + 1) + '</td>'
+                + '<td>' + e(item.label) + '<br><span class="en-label">' + e(INSPECTION_ITEMS_EN[i]) + '</span></td>'
+                + '<td class="desc-cell">' + e(item.desc) + '</td>'
+                + '<td class="result-cell ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '○' : '×') + '</td>'
+                + '<td class="remarks-cell">' + (ok ? '' : e('要確認')) + '</td>'
+                + '</tr>';
         });
-        body += '</tbody></table></div>';
+
+        // 空白行（余白）
+        for (let i = 0; i < 4; i++) {
+            body += '<tr><td class="tc">' + (10 + i) + '</td><td></td><td></td><td class="result-cell"></td><td></td></tr>';
+        }
+
+        body += '</tbody></table>';
+
+        // 特記事項
+        body += '<div class="notes-box">';
+        body += '<div class="notes-title">特記事項 NOTES</div>';
+        body += '<div class="notes-content">' + e(l.preflightNotes || '') + '</div>';
+        body += '</div>';
+
+        // フッター
+        const place = l.takeoffAddress || (l.sessions && l.sessions[0] && l.sessions[0].takeoffCoords) || '';
+        body += '<table class="footer-tbl"><tbody><tr>'
+            + '<th>実施場所<br>PLACE</th><td>' + e(place) + '</td>'
+            + '<th>実施年月日<br>DATE</th><td>' + e(_pdfFmtYMD(l.date)) + '</td>'
+            + '<th>実施者<br>CHECK PERSON</th><td>' + e(pilot.name || '') + '</td>'
+            + '</tr></tbody></table>';
+
+        body += '</div>'; // .page
+    });
+
+    if (!logs.length) {
+        body = '<p style="text-align:center;color:#888;margin:16mm 0;">飛行記録がありません</p>';
     }
 
     const css = `
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:9pt;color:#111;background:#fff;}
-@page{size:A4 portrait;margin:13mm 11mm 15mm;}
-.print-btn{display:block;margin:8px auto 14px;padding:8px 28px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;}
-@media print{.print-btn{display:none;}.flight-record{page-break-after:always;}}
-/* 表紙 */
-.cover{border:1.5pt solid #1e40af;padding:6mm;margin-bottom:6mm;}
-.cover-title{font-size:16pt;font-weight:900;text-align:center;color:#1e40af;margin-bottom:1mm;}
-.cover-sub{font-size:8.5pt;text-align:center;color:#555;margin-bottom:4mm;}
-.cover-table{width:100%;border-collapse:collapse;font-size:9pt;}
-.cover-table th{background:#eff6ff;color:#1e40af;border:0.5pt solid #93c5fd;padding:1.5mm 2.5mm;width:22%;}
-.cover-table td{border:0.5pt solid #d1d5db;padding:1.5mm 2.5mm;}
-/* 飛行記録ブロック */
-.flight-record{border:1pt solid #374151;margin-bottom:0;padding:3mm;}
-.rec-hdr{background:#1e3a5f;color:#fff;padding:2mm 3mm;margin:-3mm -3mm 3mm;display:flex;align-items:center;gap:3mm;flex-wrap:wrap;font-size:9pt;}
-.rec-seq{font-size:11pt;font-weight:900;min-width:14mm;}
-.rec-date{font-weight:700;min-width:24mm;}
-.rec-drone{flex:1;font-weight:600;}
-.rec-reg{font-size:8pt;color:#93c5fd;}
-.ok-badge{margin-left:auto;background:#16a34a;color:#fff;padding:0.5mm 3mm;border-radius:2mm;font-size:8pt;font-weight:700;}
-.defect-badge{margin-left:auto;background:#dc2626;color:#fff;padding:0.5mm 3mm;border-radius:2mm;font-size:8pt;font-weight:700;}
-/* 基本情報テーブル */
-.info-tbl{width:100%;border-collapse:collapse;margin-bottom:2.5mm;font-size:8.5pt;}
-.info-tbl th{background:#f1f5f9;color:#1e3a5f;border:0.5pt solid #cbd5e1;padding:1.5mm 2mm;white-space:nowrap;font-weight:700;width:12%;}
-.info-tbl td{border:0.5pt solid #cbd5e1;padding:1.5mm 2mm;vertical-align:top;}
-.info-tbl small{font-size:7.5pt;color:#6b7280;}
-/* セッションテーブル */
-.session-tbl{width:100%;border-collapse:collapse;margin-bottom:2.5mm;font-size:8pt;}
-.session-tbl th{background:#fef9c3;color:#713f12;border:0.5pt solid #fde68a;padding:1mm 2mm;}
-.session-tbl td{border:0.5pt solid #fde68a;padding:1mm 2mm;vertical-align:top;}
-/* 点検テーブル */
-.check-section{margin-bottom:2.5mm;}
-.check-title{font-size:9pt;font-weight:700;color:#1e40af;background:#eff6ff;border:0.5pt solid #bfdbfe;padding:1.5mm 2.5mm;border-bottom:none;}
-.ctbl{width:100%;border-collapse:collapse;font-size:8pt;}
-.ctbl th{background:#dbeafe;color:#1e3a5f;border:0.5pt solid #93c5fd;padding:1mm 2mm;text-align:left;}
-.ctbl td{border:0.5pt solid #bfdbfe;padding:1mm 2mm;vertical-align:middle;}
-.ctbl .desc{color:#4b5563;font-size:7.5pt;}
-.ctbl .notes-cell{min-width:20mm;}
-.ctbl tr.ng-row{background:#fff1f2;}
-.check-notes{font-size:8pt;border:0.5pt solid #bfdbfe;border-top:none;padding:1mm 2.5mm;color:#374151;background:#f8fafc;}
-/* 不具合欄 */
-.report-section{font-size:8.5pt;border:0.5pt solid #d1d5db;padding:1.5mm 2.5mm;background:#f8fafc;}
-.report-ng{background:#fff1f2;border-color:#fca5a5;color:#dc2626;font-weight:700;}
-.report-lbl{font-weight:700;}
-/* 整備記録 */
-.maint-section{margin-top:5mm;}
-.section-h2{font-size:11pt;font-weight:700;color:#1e40af;border-bottom:1.5pt solid #1e40af;padding-bottom:1mm;margin-bottom:2.5mm;}
-table{width:100%;border-collapse:collapse;font-size:8.5pt;}
-thead th{background:#1e40af;color:#fff;padding:1.5mm 2mm;text-align:left;}
-tbody td{border:0.4pt solid #d1d5db;padding:1.5mm 2mm;vertical-align:top;}
-tbody tr:nth-child(even) td{background:#f8fafc;}
+body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:8pt;color:#000;background:#fff;}
+@page{size:A4 portrait;margin:12mm 14mm 14mm;}
+.print-btn{display:block;margin:6px auto 10px;padding:6px 24px;background:#1e40af;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;}
+@media print{.print-btn{display:none;}.page{page-break-after:always;}}
+.page{width:100%;}
+.form-title{display:flex;align-items:baseline;gap:4mm;border-bottom:1pt solid #000;padding-bottom:1mm;margin-bottom:1.5mm;}
+.form-num{font-size:8pt;font-weight:700;}
+.form-ja{font-size:10pt;font-weight:900;}
+.form-en{font-size:8pt;font-weight:700;flex:1;}
+.form-nr{font-size:8pt;}
+.mach-tbl{width:100%;border-collapse:collapse;font-size:6.5pt;margin-bottom:2mm;}
+.mach-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;font-weight:700;white-space:nowrap;}
+.mach-tbl td{border:0.5pt solid #000;padding:0.8mm 1mm;text-align:center;}
+.insp-tbl{width:100%;border-collapse:collapse;font-size:8pt;margin-bottom:2mm;}
+.insp-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:1mm 2mm;text-align:center;font-weight:700;}
+.insp-tbl td{border:0.5pt solid #000;padding:1.5mm 2mm;vertical-align:middle;height:10mm;}
+.insp-tbl .tc{text-align:center;}
+.insp-tbl .en-label{font-size:7pt;color:#444;}
+.insp-tbl .desc-cell{font-size:7pt;color:#333;}
+.insp-tbl .result-cell{text-align:center;font-size:12pt;font-weight:900;}
+.insp-tbl .result-cell.ok{color:#000;}
+.insp-tbl .result-cell.ng{color:#000;}
+.insp-tbl .remarks-cell{font-size:7.5pt;}
+.notes-box{border:0.5pt solid #000;margin-bottom:2mm;}
+.notes-title{background:#e8e8e8;border-bottom:0.5pt solid #000;padding:1mm 2mm;font-weight:700;font-size:8pt;}
+.notes-content{padding:2mm;min-height:16mm;font-size:8pt;}
+.footer-tbl{width:100%;border-collapse:collapse;font-size:8pt;}
+.footer-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:1mm 2mm;text-align:center;font-weight:700;white-space:nowrap;}
+.footer-tbl td{border:0.5pt solid #000;padding:1mm 2mm;min-height:8mm;}
 `;
-
-    const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>無人航空機飛行日誌 ' + today + '</title><style>' + css + '</style></head><body>'
+    const periodLabel = (state.pdfFrom || state.pdfTo)
+        ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
+    const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + '<button class="print-btn" onclick="window.print()">🖨 印刷 / PDFで保存</button>'
-        + body
-        + '</body></html>';
-
+        + body + '</body></html>';
     w.document.write(html);
     w.document.close();
 }
@@ -1213,7 +1413,13 @@ function render() {
         html += '<div class="test-mode-banner">🧪 テストモード</div>';
         html += '<button onclick="clearCache()" class="btn btn-danger btn-small">🗑 リセット</button>';
     }
-    html += '<button onclick="exportPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>PDF出力</button>';
+    html += '<span style="font-size:13px;white-space:nowrap;">PDF期間:</span>';
+    html += '<input type="date" value="' + state.pdfFrom + '" onchange="state.pdfFrom=this.value" style="font-size:13px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;">';
+    html += '<span style="font-size:13px;">〜</span>';
+    html += '<input type="date" value="' + state.pdfTo + '" onchange="state.pdfTo=this.value" style="font-size:13px;padding:2px 4px;border:1px solid #ccc;border-radius:4px;">';
+    html += '<button onclick="diagAddress()" class="btn btn-warning btn-small">🔍 住所診断</button>';
+    html += '<button onclick="exportJourneyLogPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>飛行記録PDF</button>';
+    html += '<button onclick="exportInspectionPDF()" class="btn btn-success"' + (state.loading ? ' disabled' : '') + '>点検記録PDF</button>';
     html += '<button onclick="exportData()" class="btn btn-dark"' + (state.loading ? ' disabled' : '') + '>JSON出力</button>';
     html += '</div></div></div>';
     html += '<div class="container" style="padding-top:1rem;">';
