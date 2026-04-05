@@ -967,6 +967,19 @@ function _pdfSecsToHHMM(secs) {
     return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
 }
 function _pdfFmtYMD(d) { return String(d||'').replace(/-/g,''); }
+// GASがDate型を"1899-12-30T09:15:00.000Z"として返す場合に対応
+function _pdfFmtDate(d) {
+    if (!d) return '';
+    const s = String(d).slice(0, 10); // "2026-04-05" or "1899-12-30"
+    return s.replace(/-/g, '/');
+}
+function _pdfFmtTime(t) {
+    if (!t) return '';
+    const s = String(t);
+    const idx = s.indexOf('T');
+    if (idx !== -1) return s.slice(idx + 1, idx + 6); // ISO形式 → HH:MM
+    return s.slice(0, 5); // すでに "HH:MM" 形式
+}
 // 機体情報テーブル（2行レイアウト）
 function _pdfMachineRow(drone) {
     const e = _pdfEsc;
@@ -1074,8 +1087,8 @@ function exportJourneyLogPDF() {
                     const l = r.log;
                     const pilot = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
                     const sessions = l.sessions || [];
-                    const from = l.takeoffAddress || (sessions[0] && sessions[0].takeoffCoords) || '';
-                    const to   = l.landingAddress || (sessions[sessions.length-1] && sessions[sessions.length-1].landingCoords) || '';
+                    const from = l.takeoffAddress || '';
+                    const to   = l.landingAddress || '';
                     const offTime = sessions[0] ? (sessions[0].takeoffTime || l.startTime || '') : (l.startTime || '');
                     const onTime  = sessions[sessions.length-1] ? (sessions[sessions.length-1].landingTime || l.endTime || '') : (l.endTime || '');
                     const safety = l.flightReport && l.flightReport !== '正常' ? l.flightReport : '';
@@ -1240,8 +1253,8 @@ function exportInspectionPDF() {
         body += '</div>';
 
         // フッター
-        const place = l.takeoffAddress || (l.sessions && l.sessions[0] && l.sessions[0].takeoffCoords) || '';
-        const dateTime = String(l.date || '').replace(/-/g, '/') + (l.startTime ? ' ' + String(l.startTime).slice(0, 5) : '');
+        const place = l.takeoffAddress || '';
+        const dateTime = _pdfFmtDate(l.date) + (_pdfFmtTime(l.startTime) ? ' ' + _pdfFmtTime(l.startTime) : '');
         body += '<table class="footer-tbl"><tbody><tr>'
             + '<th>実施場所</th><td>' + e(place) + '</td>'
             + '<th>実施年月日</th><td>' + e(dateTime) + '</td>'
@@ -1594,12 +1607,8 @@ function renderFlightLogCard(log) {
     if (log.flightMode) html += '<p style="grid-column:1/-1"><span class="font-medium">飛行形態:</span> ' + log.flightMode + '</p>';
     html += '<p><span class="font-medium">時刻:</span> ' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
     html += '<p><span class="font-medium">気象:</span> ' + log.weather + '</p>';
-    const fmtPlace = (addr, coords) => {
-        if (addr && coords) return addr + '<br><span style="font-size:0.8rem;color:#6b7280;">(' + coords + ')</span>';
-        return addr || coords || '-';
-    };
-    html += '<p><span class="font-medium">離陸場所:</span> ' + fmtPlace(log.takeoffAddress, log.takeoffLocation) + '</p>';
-    html += '<p><span class="font-medium">着陸場所:</span> ' + fmtPlace(log.landingAddress, log.landingLocation) + '</p>';
+    html += '<p><span class="font-medium">離陸場所:</span> ' + (log.takeoffAddress || '-') + '</p>';
+    html += '<p><span class="font-medium">着陸場所:</span> ' + (log.landingAddress || '-') + '</p>';
     html += '</div>';
     if (log.flightReport && log.flightReport !== '正常') {
         html += '<p class="text-sm mt-1" style="color:#92400e;background:#fffbeb;padding:0.375rem 0.75rem;border-radius:0.375rem;">'
