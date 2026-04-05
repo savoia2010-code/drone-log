@@ -1241,9 +1241,10 @@ function exportInspectionPDF() {
 
         // フッター
         const place = l.takeoffAddress || (l.sessions && l.sessions[0] && l.sessions[0].takeoffCoords) || '';
+        const dateTime = String(l.date || '').replace(/-/g, '/') + (l.startTime ? ' ' + String(l.startTime).slice(0, 5) : '');
         body += '<table class="footer-tbl"><tbody><tr>'
             + '<th>実施場所</th><td>' + e(place) + '</td>'
-            + '<th>実施年月日</th><td>' + e(_pdfFmtYMD(l.date)) + '</td>'
+            + '<th>実施年月日</th><td>' + e(dateTime) + '</td>'
             + '<th>実施者</th><td>' + e(pilot.name || '') + '</td>'
             + '</tr></tbody></table>';
 
