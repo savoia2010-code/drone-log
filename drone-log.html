@@ -972,15 +972,15 @@ function _pdfMachineRow(drone) {
     const e = _pdfEsc;
     return '<table class="mach-tbl"><tbody>'
         + '<tr>'
-        + '<th>登録記号<br><small>REGISTRATION MARK</small></th><td>' + e(drone.registrationNumber||'') + '</td>'
-        + '<th>種類<br><small>TYPE</small></th><td>回転翼航空機（マルチローター）</td>'
-        + '<th>型式<br><small>MODEL</small></th><td>' + e(drone.model||'') + '</td>'
-        + '<th>型式認証書番号<br><small>TYPE CERT. NO.</small></th><td>' + e(drone.typeCertNumber||'') + '</td>'
+        + '<th>登録記号</th><td>' + e(drone.registrationNumber||'') + '</td>'
+        + '<th>種類</th><td>回転翼航空機（マルチローター）</td>'
+        + '<th>型式</th><td>' + e(drone.model||'') + '</td>'
+        + '<th>型式認証書番号</th><td>' + e(drone.typeCertNumber||'') + '</td>'
         + '</tr><tr>'
-        + '<th>機体認証区分<br><small>CERT. CLASS</small></th><td>' + e(drone.certClass||'') + '</td>'
-        + '<th>機体認証書番号<br><small>AIRWORTHINESS NO.</small></th><td>' + e(drone.certNumber||'') + '</td>'
-        + '<th>製造者<br><small>MANUFACTURER</small></th><td>' + e(drone.manufacturer||'') + '</td>'
-        + '<th>製造番号<br><small>SERIAL NO.</small></th><td>' + e(drone.serialNumber||'') + '</td>'
+        + '<th>機体認証区分</th><td>' + e(drone.certClass||'') + '</td>'
+        + '<th>機体認証書番号</th><td>' + e(drone.certNumber||'') + '</td>'
+        + '<th>製造者</th><td>' + e(drone.manufacturer||'') + '</td>'
+        + '<th>製造番号</th><td>' + e(drone.serialNumber||'') + '</td>'
         + '</tr>'
         + '</tbody></table>';
 }
@@ -1042,7 +1042,6 @@ function exportJourneyLogPDF() {
             body += '<div class="form-title">';
             body += '<span class="form-num">（様式１）飛行記録</span>';
             body += '<span class="form-ja">無人航空機の飛行記録</span>';
-            body += '<span class="form-en">JOURNEY LOG OF UAS</span>';
             body += '<span class="form-nr">（NR.' + (pg + 1) + '）</span>';
             body += '</div>';
 
@@ -1051,22 +1050,22 @@ function exportJourneyLogPDF() {
 
             // 飛行記録テーブル
             body += '<table class="log-tbl"><thead><tr>'
-                + '<th class="col-date">飛行年月日<br>DATE</th>'
-                + '<th class="col-pilot">飛行させた者の氏名<br>PILOT IN COMMAND</th>'
-                + '<th class="col-summary">飛行概要<br>FLIGHT SUMMARY</th>'
-                + '<th class="col-from">離陸場所<br>FROM</th>'
-                + '<th class="col-to">着陸場所<br>TO</th>'
-                + '<th class="col-time">離陸時刻<br>OFF TIME</th>'
-                + '<th class="col-time">着陸時刻<br>ON TIME</th>'
-                + '<th class="col-dur">飛行時間<br>HH:MM</th>'
-                + '<th class="col-total">総飛行時間<br>HH:MM</th>'
-                + '<th class="col-safety">飛行の安全に影響のあった事項<br>SAFETY MATTERS</th>'
+                + '<th class="col-date">飛行年月日</th>'
+                + '<th class="col-pilot">飛行させた者の氏名</th>'
+                + '<th class="col-summary">飛行概要</th>'
+                + '<th class="col-from">離陸場所</th>'
+                + '<th class="col-to">着陸場所</th>'
+                + '<th class="col-time">離陸時刻</th>'
+                + '<th class="col-time">着陸時刻</th>'
+                + '<th class="col-dur">飛行時間</th>'
+                + '<th class="col-total">総飛行時間</th>'
+                + '<th class="col-safety">飛行の安全に影響のあった事項</th>'
                 + '</tr></thead><tbody>';
 
             pageRows.forEach(r => {
                 if (r.isCarryover) {
                     body += '<tr class="carryover-row">'
-                        + '<td colspan="7" style="text-align:right;font-size:7pt;color:#555;">繰越（アプリ導入前）BROUGHT FORWARD</td>'
+                        + '<td colspan="7" style="text-align:right;font-size:7pt;color:#555;">繰越（アプリ導入前）</td>'
                         + '<td class="tc">' + _pdfSecsToHHMM(r.secs) + '</td>'
                         + '<td class="tc">' + _pdfSecsToHHMM(r.cumSecs) + '</td>'
                         + '<td></td>'
@@ -1105,8 +1104,8 @@ function exportJourneyLogPDF() {
             // 最終ページにREPORTセクション
             if (isLastDronePage) {
                 body += '<table class="report-tbl"><tbody>';
-                body += '<tr><td rowspan="5" class="report-label">REPORT</td>'
-                    + '<th>SQUAWK DATE</th><th>FLIGHT SQUAWK</th><th>ACTION DATE</th><th>CORRECTIVE ACTION</th><th>CONFIRMER</th></tr>';
+                body += '<tr><td rowspan="5" class="report-label">報告</td>'
+                    + '<th>発生日</th><th>不具合内容</th><th>対応日</th><th>是正措置</th><th>確認者</th></tr>';
                 for (let i = 0; i < 5; i++) {
                     body += '<tr><td></td><td></td><td></td><td></td><td></td></tr>';
                 }
@@ -1121,7 +1120,6 @@ function exportJourneyLogPDF() {
             body += '<div class="form-title">';
             body += '<span class="form-num">（様式１）飛行記録</span>';
             body += '<span class="form-ja">無人航空機の飛行記録</span>';
-            body += '<span class="form-en">JOURNEY LOG OF UAS</span>';
             body += '<span class="form-nr">（NR.1）</span>';
             body += '</div>';
             body += _pdfMachineRow(drone);
@@ -1187,11 +1185,6 @@ function exportInspectionPDF() {
     if (!w) { alert('ポップアップがブロックされています。許可してから再試行してください。'); return; }
     const e = _pdfEsc;
 
-    const INSPECTION_ITEMS_EN = [
-        'UAS GENERAL', 'PROPELLER(S)', 'FRAME', 'COMMUNICATION SYSTEM',
-        'PROPULSION SYSTEM', 'POWER SYSTEM', 'AUTOMATIC CONTROL SYSTEM',
-        'FLIGHT CONTROL SYSTEM', 'BATTERY / FUEL'
-    ];
 
     const logs = [..._pdfFilteredLogs()].reverse(); // 古い順（期間フィルタ適用）
     let body = '';
@@ -1207,7 +1200,6 @@ function exportInspectionPDF() {
         body += '<div class="form-title">';
         body += '<span class="form-num">（様式２）日常点検記録</span>';
         body += '<span class="form-ja">無人航空機の日常点検記録</span>';
-        body += '<span class="form-en">DAILY INSPECTION RECORD OF UAS</span>';
         body += '<span class="form-nr">（NR.' + (idx + 1) + '）</span>';
         body += '</div>';
 
@@ -1217,17 +1209,17 @@ function exportInspectionPDF() {
         // 点検テーブル
         body += '<table class="insp-tbl"><thead><tr>'
             + '<th class="tc">No.</th>'
-            + '<th class="item-cell">点検項目<br>INSPECTION ITEMS</th>'
+            + '<th class="item-cell">点検項目</th>'
             + '<th class="desc-cell">点検内容</th>'
-            + '<th class="result-cell">結果<br>RESULT</th>'
-            + '<th class="remarks-cell">備考<br>REMARKS</th>'
+            + '<th class="result-cell">結果</th>'
+            + '<th class="remarks-cell">備考</th>'
             + '</tr></thead><tbody>';
 
         PREFLIGHT_ITEMS.slice(0, 9).forEach((item, i) => {
             const ok = pfChecks[item.id] !== false;
             body += '<tr>'
                 + '<td class="tc">' + (i + 1) + '</td>'
-                + '<td class="item-cell">' + e(item.label) + '<span class="en-label">' + e(INSPECTION_ITEMS_EN[i]) + '</span></td>'
+                + '<td class="item-cell">' + e(item.label) + '</td>'
                 + '<td class="desc-cell">' + e(item.desc) + '</td>'
                 + '<td class="result-cell ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '○' : '×') + '</td>'
                 + '<td class="remarks-cell">' + (ok ? '' : e('要確認')) + '</td>'
@@ -1243,16 +1235,16 @@ function exportInspectionPDF() {
 
         // 特記事項
         body += '<div class="notes-box">';
-        body += '<div class="notes-title">特記事項 NOTES</div>';
+        body += '<div class="notes-title">特記事項</div>';
         body += '<div class="notes-content">' + e(l.preflightNotes || '') + '</div>';
         body += '</div>';
 
         // フッター
         const place = l.takeoffAddress || (l.sessions && l.sessions[0] && l.sessions[0].takeoffCoords) || '';
         body += '<table class="footer-tbl"><tbody><tr>'
-            + '<th>実施場所<br>PLACE</th><td>' + e(place) + '</td>'
-            + '<th>実施年月日<br>DATE</th><td>' + e(_pdfFmtYMD(l.date)) + '</td>'
-            + '<th>実施者<br>CHECK PERSON</th><td>' + e(pilot.name || '') + '</td>'
+            + '<th>実施場所</th><td>' + e(place) + '</td>'
+            + '<th>実施年月日</th><td>' + e(_pdfFmtYMD(l.date)) + '</td>'
+            + '<th>実施者</th><td>' + e(pilot.name || '') + '</td>'
             + '</tr></tbody></table>';
 
         body += '</div>'; // .page
