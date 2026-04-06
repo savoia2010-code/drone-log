@@ -1942,11 +1942,16 @@ function render() {
             setTimeout(autoFetchTakeoffAddress, 0);
             setTimeout(function() {
                 const sel = document.getElementById('flight-drone-select');
-                console.log('[DroneSelect] sel:', sel, 'defaultDroneId:', state._defaultDroneId, 'flightLogs:', state.flightLogs.length);
                 if (!sel) return;
-                const droneId = state._defaultDroneId || sel.value;
-                console.log('[DroneSelect] using droneId:', droneId, 'sel.value:', sel.value);
-                if (droneId) { sel.value = droneId; onDroneSelect(droneId); }
+                const droneId = String(state._defaultDroneId || '');
+                if (!droneId) return;
+                // iOS Safari対応: sel.value代入ではなく各optionのselectedを直接操作
+                let found = false;
+                Array.from(sel.options).forEach(function(opt) {
+                    if (opt.value === droneId) { opt.selected = true; found = true; }
+                    else { opt.selected = false; }
+                });
+                if (found) onDroneSelect(droneId);
             }, 0);
         }
         if (state.activeTab === 'maintenance' && state.showMaintenanceForm && !state.loading) {
@@ -2029,7 +2034,6 @@ function renderFlightTab() {
             : null;
         const lastDroneId  = lastLog ? String(lastLog.droneId)  : '';
         state._defaultDroneId = lastDroneId; // ポストレンダーで参照するために保存
-        console.log('[renderFlightTab] lastLog:', lastLog, 'lastDroneId:', lastDroneId, 'drones:', state.drones.map(d=>d.id));
         const lastPilotId  = lastLog ? String(lastLog.pilotId)  : '';
         const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
         const lastFmModes  = lastLog && lastLog.flightMode ? lastLog.flightMode.split('、') : [];
