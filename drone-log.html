@@ -1928,6 +1928,10 @@ function render() {
         if (state.activeTab === 'flight' && !state.isRecording && !state.loading) {
             setTimeout(autoFetchWeather, 0);
             setTimeout(autoFetchTakeoffAddress, 0);
+            setTimeout(function() {
+                const sel = document.getElementById('flight-drone-select');
+                if (sel && sel.value) onDroneSelect(sel.value);
+            }, 0);
         }
         if (state.activeTab === 'maintenance' && state.showMaintenanceForm && !state.loading) {
             setTimeout(autoFetchLocation, 0);
@@ -2003,8 +2007,10 @@ function renderFlightTab() {
 
     } else {
         // ── 飛行開始フォーム ──────────────────────────
-        // 前回フライトから初期値を取得
-        const lastLog = state.flightLogs[0] || null;
+        // 前回フライトから初期値を取得（日付で最新を確定）
+        const lastLog = state.flightLogs.length
+            ? [...state.flightLogs].sort((a, b) => String(b.date || '').slice(0, 10).localeCompare(String(a.date || '').slice(0, 10)))[0]
+            : null;
         const lastDroneId  = lastLog ? String(lastLog.droneId)  : '';
         const lastPilotId  = lastLog ? String(lastLog.pilotId)  : '';
         const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
