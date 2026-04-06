@@ -2,9 +2,15 @@
 const SPREADSHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 
 // OpenWeatherMap APIキー（スクリプトプロパティから取得）
-// セットアップ: スクリプトエディタで「プロジェクトの設定」→「スクリプト プロパティ」→「OPENWEATHER_API_KEY」を追加
 function getWeatherApiKey() {
   return PropertiesService.getScriptProperties().getProperty('OPENWEATHER_API_KEY');
+}
+
+// ─── スプレッドシートキャッシュ（1リクエスト内で1回だけ openById する）────────
+let _ss_ = null;
+function ss_() {
+  if (!_ss_) _ss_ = SpreadsheetApp.openById(SPREADSHEET_ID);
+  return _ss_;
 }
 
 // CORS対応
@@ -70,16 +76,7 @@ function doPost(e) {
         result = deletePilot(params.data);
         break;
       case 'getAllData':
-        result = {
-          drones: getDrones(),
-          pilots: getPilots(),
-          flightLogs: getFlightLogs(),
-          maintenanceLogs: getMaintenanceLogs(),
-          flightPurposes: getFlightPurposes(),
-          maintenanceContents: getMaintenanceContents(),
-          technicians: getTechnicians(),
-          maintenanceLocations: getMaintenanceLocations()
-        };
+        result = getAllData_();
         break;
       case 'addFlightPurpose':
         result = addFlightPurpose(params.data);
@@ -112,14 +109,32 @@ function doPost(e) {
   }
 }
 
-// ─── 機体 ────────────────────────────────────────────────────────────────────
+// ─── getAllData（スプレッドシートを1回だけ開いて全シートを一括取得）────────────
+function getAllData_() {
+  const ss = ss_();
+  // 全シートオブジェクトを一度に取得してマップ化
+  const sheetMap = {};
+  ss.getSheets().forEach(s => { sheetMap[s.getName()] = s; });
 
-function getDrones() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('機体');
-  if (!sheet) return [];
+  return {
+    drones:              readSheetAsObjects_(sheetMap['機体'],    []),
+    pilots:              readPilots_(sheetMap['操縦者']),
+    flightLogs:          readFlightLogs_(sheetMap['飛行記録']),
+    maintenanceLogs:     readSheetAsObjects_(sheetMap['整備記録'], []).reverse(),
+    flightPurposes:      readSingleColumn_(sheetMap['飛行目的'],  ['空撮','測量','点検','農薬散布','配送','訓練','趣味']),
+    maintenanceContents: readSingleColumn_(sheetMap['整備内容'],  ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換']),
+    technicians:         readSingleColumn_(sheetMap['作業者'],    []),
+    maintenanceLocations:readSingleColumn_(sheetMap['整備場所'],  [])
+  };
+}
+
+// ─── 共通読み込みヘルパー ──────────────────────────────────────────────────────
+
+// ヘッダー行付きシートをオブジェクト配列に変換
+function readSheetAsObjects_(sheet, defaultVal) {
+  if (!sheet) return defaultVal;
   const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
+  if (data.length <= 1) return defaultVal;
   const headers = data[0];
   return data.slice(1).map(row => {
     const obj = {};
@@ -128,11 +143,65 @@ function getDrones() {
   });
 }
 
+// 1列目のみのシートを配列に変換
+function readSingleColumn_(sheet, defaultVal) {
+  if (!sheet) return defaultVal;
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return defaultVal;
+  return data.slice(1).map(row => row[0]).filter(v => v);
+}
+
+// 操縦者（limitations列はJSONパース）
+function readPilots_(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  const headers = data[0];
+  return data.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      if (h === 'limitations' && row[i]) {
+        try { obj[h] = JSON.parse(row[i]); } catch(e) { obj[h] = null; }
+      } else {
+        obj[h] = row[i];
+      }
+    });
+    return obj;
+  });
+}
+
+// 飛行記録（JSON列のパース＋逆順）
+function readFlightLogs_(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  const headers = data[0];
+  const JSON_FIELDS = ['preflightChecks','postflightChecks','sessions'];
+  return data.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      if (JSON_FIELDS.includes(h) && row[i]) {
+        try { obj[h] = JSON.parse(row[i]); } catch(e) { obj[h] = null; }
+      } else {
+        obj[h] = row[i];
+      }
+    });
+    return obj;
+  }).reverse();
+}
+
+// ─── 機体 ────────────────────────────────────────────────────────────────────
+
+function getDrones() {
+  const sheet = ss_().getSheetByName('機体');
+  return readSheetAsObjects_(sheet, []);
+}
+
 function addDrone(drone) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('機体');
+  const s = ss_();
+  let sheet = s.getSheetByName('機体');
   if (!sheet) {
-    sheet = ss.insertSheet('機体');
+    sheet = s.insertSheet('機体');
     sheet.appendRow(['id','manufacturer','model','serialNumber','registrationNumber',
                      'weight','purchaseDate','appRegisteredDate','preRegistrationMins']);
   }
@@ -152,17 +221,15 @@ function addDrone(drone) {
 }
 
 function updateDrone(drone) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('機体');
+  const sheet = ss_().getSheetByName('機体');
   if (!sheet) return { error: 'シートが見つかりません' };
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idCol = headers.indexOf('id');
   for (let r = 1; r < data.length; r++) {
     if (String(data[r][idCol]) === String(drone.id)) {
-      headers.forEach((h, c) => {
-        if (drone[h] !== undefined) sheet.getRange(r + 1, c + 1).setValue(drone[h]);
-      });
+      const newRow = headers.map((h, c) => drone[h] !== undefined ? drone[h] : data[r][c]);
+      sheet.getRange(r + 1, 1, 1, headers.length).setValues([newRow]);
       return { success: true };
     }
   }
@@ -170,8 +237,7 @@ function updateDrone(drone) {
 }
 
 function deleteDrone(data) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('機体');
+  const sheet = ss_().getSheetByName('機体');
   if (!sheet) return { error: 'シートが見つかりません' };
   const values = sheet.getDataRange().getValues();
   const idCol = values[0].indexOf('id');
@@ -187,30 +253,15 @@ function deleteDrone(data) {
 // ─── 操縦者 ──────────────────────────────────────────────────────────────────
 
 function getPilots() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('操縦者');
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  const headers = data[0];
-  return data.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      if (h === 'limitations' && row[i]) {
-        try { obj[h] = JSON.parse(row[i]); } catch(e) { obj[h] = null; }
-      } else {
-        obj[h] = row[i];
-      }
-    });
-    return obj;
-  });
+  const sheet = ss_().getSheetByName('操縦者');
+  return readPilots_(sheet);
 }
 
 function addPilot(pilot) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('操縦者');
+  const s = ss_();
+  let sheet = s.getSheetByName('操縦者');
   if (!sheet) {
-    sheet = ss.insertSheet('操縦者');
+    sheet = s.insertSheet('操縦者');
     sheet.appendRow(['id','name','licenseType','licenseNumber','issueDate','expiryDate',
                      'birthDate','address','phone','email','notes','limitations']);
   }
@@ -233,22 +284,18 @@ function addPilot(pilot) {
 }
 
 function updatePilot(pilot) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('操縦者');
+  const sheet = ss_().getSheetByName('操縦者');
   if (!sheet) return { error: 'シートが見つかりません' };
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idCol = headers.indexOf('id');
   for (let r = 1; r < data.length; r++) {
     if (String(data[r][idCol]) === String(pilot.id)) {
-      headers.forEach((h, c) => {
-        if (pilot[h] !== undefined) {
-          const val = h === 'limitations' && typeof pilot[h] === 'object'
-            ? JSON.stringify(pilot[h])
-            : pilot[h];
-          sheet.getRange(r + 1, c + 1).setValue(val);
-        }
+      const newRow = headers.map((h, c) => {
+        if (pilot[h] === undefined) return data[r][c];
+        return (h === 'limitations' && typeof pilot[h] === 'object') ? JSON.stringify(pilot[h]) : pilot[h];
       });
+      sheet.getRange(r + 1, 1, 1, headers.length).setValues([newRow]);
       return { success: true };
     }
   }
@@ -256,8 +303,7 @@ function updatePilot(pilot) {
 }
 
 function deletePilot(data) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('操縦者');
+  const sheet = ss_().getSheetByName('操縦者');
   if (!sheet) return { error: 'シートが見つかりません' };
   const values = sheet.getDataRange().getValues();
   const idCol = values[0].indexOf('id');
@@ -273,31 +319,15 @@ function deletePilot(data) {
 // ─── 飛行記録 ────────────────────────────────────────────────────────────────
 
 function getFlightLogs() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('飛行記録');
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  const headers = data[0];
-  const JSON_FIELDS = ['preflightChecks','postflightChecks','sessions'];
-  return data.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      if (JSON_FIELDS.includes(h) && row[i]) {
-        try { obj[h] = JSON.parse(row[i]); } catch(e) { obj[h] = null; }
-      } else {
-        obj[h] = row[i];
-      }
-    });
-    return obj;
-  }).reverse();
+  const sheet = ss_().getSheetByName('飛行記録');
+  return readFlightLogs_(sheet);
 }
 
 function addFlightLog(log) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('飛行記録');
+  const s = ss_();
+  let sheet = s.getSheetByName('飛行記録');
   if (!sheet) {
-    sheet = ss.insertSheet('飛行記録');
+    sheet = s.insertSheet('飛行記録');
     sheet.appendRow([
       'id','droneId','pilotId','date','startTime','endTime',
       'takeoffAddress','landingAddress','takeoffLocation','landingLocation',
@@ -336,8 +366,7 @@ function addFlightLog(log) {
 }
 
 function updateFlightLog(log) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('飛行記録');
+  const sheet = ss_().getSheetByName('飛行記録');
   if (!sheet) return { error: 'シートが見つかりません' };
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -345,14 +374,25 @@ function updateFlightLog(log) {
   const JSON_FIELDS = ['preflightChecks','postflightChecks','sessions'];
   for (let r = 1; r < data.length; r++) {
     if (String(data[r][idCol]) === String(log.id)) {
-      headers.forEach((h, c) => {
-        if (log[h] !== undefined) {
-          const val = JSON_FIELDS.includes(h) && typeof log[h] === 'object'
-            ? JSON.stringify(log[h])
-            : log[h];
-          sheet.getRange(r + 1, c + 1).setValue(val);
-        }
+      const newRow = headers.map((h, c) => {
+        if (log[h] === undefined) return data[r][c];
+        return (JSON_FIELDS.includes(h) && typeof log[h] === 'object') ? JSON.stringify(log[h]) : log[h];
       });
+      sheet.getRange(r + 1, 1, 1, headers.length).setValues([newRow]);
+      return { success: true };
+    }
+  }
+  return { error: 'レコードが見つかりません' };
+}
+
+function deleteFlightLog(data) {
+  const sheet = ss_().getSheetByName('飛行記録');
+  if (!sheet) return { error: 'シートが見つかりません' };
+  const values = sheet.getDataRange().getValues();
+  const idCol = values[0].indexOf('id');
+  for (let r = 1; r < values.length; r++) {
+    if (String(values[r][idCol]) === String(data.id)) {
+      sheet.deleteRow(r + 1);
       return { success: true };
     }
   }
@@ -362,24 +402,15 @@ function updateFlightLog(log) {
 // ─── 整備記録 ────────────────────────────────────────────────────────────────
 
 function getMaintenanceLogs() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('整備記録');
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  const headers = data[0];
-  return data.slice(1).map(row => {
-    const obj = {};
-    headers.forEach((h, i) => { obj[h] = row[i]; });
-    return obj;
-  }).reverse();
+  const sheet = ss_().getSheetByName('整備記録');
+  return readSheetAsObjects_(sheet, []).reverse();
 }
 
 function addMaintenanceLog(log) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('整備記録');
+  const s = ss_();
+  let sheet = s.getSheetByName('整備記録');
   if (!sheet) {
-    sheet = ss.insertSheet('整備記録');
+    sheet = s.insertSheet('整備記録');
     sheet.appendRow(['id','droneId','date','type','technician','description',
                      'maintenanceLocation','nextDate','notes','createdAt']);
   }
@@ -399,34 +430,16 @@ function addMaintenanceLog(log) {
   return { success: true, id: id };
 }
 
-function deleteFlightLog(data) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('飛行記録');
-  if (!sheet) return { error: 'シートが見つかりません' };
-  const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const idCol = headers.indexOf('id');
-  for (let r = 1; r < values.length; r++) {
-    if (String(values[r][idCol]) === String(data.id)) {
-      sheet.deleteRow(r + 1);
-      return { success: true };
-    }
-  }
-  return { error: 'レコードが見つかりません' };
-}
-
 function updateMaintenanceLog(log) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('整備記録');
+  const sheet = ss_().getSheetByName('整備記録');
   if (!sheet) return { error: 'シートが見つかりません' };
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const idCol = headers.indexOf('id');
   for (let r = 1; r < data.length; r++) {
     if (String(data[r][idCol]) === String(log.id)) {
-      headers.forEach((h, c) => {
-        if (log[h] !== undefined) sheet.getRange(r + 1, c + 1).setValue(log[h]);
-      });
+      const newRow = headers.map((h, c) => log[h] !== undefined ? log[h] : data[r][c]);
+      sheet.getRange(r + 1, 1, 1, headers.length).setValues([newRow]);
       return { success: true };
     }
   }
@@ -434,12 +447,10 @@ function updateMaintenanceLog(log) {
 }
 
 function deleteMaintenanceLog(data) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('整備記録');
+  const sheet = ss_().getSheetByName('整備記録');
   if (!sheet) return { error: 'シートが見つかりません' };
   const values = sheet.getDataRange().getValues();
-  const headers = values[0];
-  const idCol = headers.indexOf('id');
+  const idCol = values[0].indexOf('id');
   for (let r = 1; r < values.length; r++) {
     if (String(values[r][idCol]) === String(data.id)) {
       sheet.deleteRow(r + 1);
@@ -452,78 +463,73 @@ function deleteMaintenanceLog(data) {
 // ─── 飛行目的 ────────────────────────────────────────────────────────────────
 
 function getFlightPurposes() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('飛行目的');
-  if (!sheet) {
-    sheet = ss.insertSheet('飛行目的');
-    sheet.appendRow(['purpose']);
-    ['空撮','測量','点検','農薬散布','配送','訓練','趣味'].forEach(p => sheet.appendRow([p]));
-  }
-  const data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return ['空撮','測量','点検','農薬散布','配送','訓練','趣味'];
-  return data.slice(1).map(row => row[0]).filter(p => p);
+  const sheet = ss_().getSheetByName('飛行目的');
+  return readSingleColumn_(sheet, ['空撮','測量','点検','農薬散布','配送','訓練','趣味']);
 }
 
 function addFlightPurpose(purpose) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('飛行目的');
-  if (!sheet) { sheet = ss.insertSheet('飛行目的'); sheet.appendRow(['purpose']); }
-  if (!getFlightPurposes().includes(purpose)) {
-    sheet.appendRow([purpose]);
+  const s = ss_();
+  let sheet = s.getSheetByName('飛行目的');
+  if (!sheet) {
+    sheet = s.insertSheet('飛行目的');
+    sheet.appendRow(['purpose']);
+    ['空撮','測量','点検','農薬散布','配送','訓練','趣味'].forEach(p => sheet.appendRow([p]));
   }
+  // 既存値をシートから直接読んで重複チェック（getFlightPurposes()の再呼び出しを避ける）
+  const existing = sheet.getDataRange().getValues().slice(1).map(r => r[0]);
+  if (!existing.includes(purpose)) sheet.appendRow([purpose]);
   return { success: true };
 }
 
+// ─── 整備内容 ────────────────────────────────────────────────────────────────
+
 function getMaintenanceContents() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('整備内容');
-  if (!sheet) return ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'];
-  const data = sheet.getDataRange().getValues();
-  return data.slice(1).map(row => row[0]).filter(c => c);
+  const sheet = ss_().getSheetByName('整備内容');
+  return readSingleColumn_(sheet, ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換']);
 }
 
 function addMaintenanceContent(content) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('整備内容');
+  const s = ss_();
+  let sheet = s.getSheetByName('整備内容');
   if (!sheet) {
-    sheet = ss.insertSheet('整備内容');
+    sheet = s.insertSheet('整備内容');
     sheet.appendRow(['content']);
     ['定期点検実施（異常なし）','機体全体の目視点検','プロペラの点検・清掃','バッテリーの点検・充電確認','センサー類の動作確認','モーターの点検','フレームの点検・清掃','部品交換'].forEach(c => sheet.appendRow([c]));
   }
-  if (!getMaintenanceContents().includes(content)) {
-    sheet.appendRow([content]);
-  }
+  const existing = sheet.getDataRange().getValues().slice(1).map(r => r[0]);
+  if (!existing.includes(content)) sheet.appendRow([content]);
   return { success: true };
 }
 
+// ─── 作業者 ──────────────────────────────────────────────────────────────────
+
 function getTechnicians() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('作業者');
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  return data.slice(1).map(row => row[0]).filter(t => t);
+  const sheet = ss_().getSheetByName('作業者');
+  return readSingleColumn_(sheet, []);
 }
 
 function addTechnician(name) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('作業者');
-  if (!sheet) { sheet = ss.insertSheet('作業者'); sheet.appendRow(['name']); }
-  if (!getTechnicians().includes(name)) { sheet.appendRow([name]); }
+  const s = ss_();
+  let sheet = s.getSheetByName('作業者');
+  if (!sheet) { sheet = s.insertSheet('作業者'); sheet.appendRow(['name']); }
+  const existing = sheet.getDataRange().getValues().slice(1).map(r => r[0]);
+  if (!existing.includes(name)) sheet.appendRow([name]);
   return { success: true };
 }
 
+// ─── 整備場所 ────────────────────────────────────────────────────────────────
+
 function getMaintenanceLocations() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const sheet = ss.getSheetByName('整備場所');
-  if (!sheet) return [];
-  return sheet.getDataRange().getValues().slice(1).map(r => r[0]).filter(v => v);
+  const sheet = ss_().getSheetByName('整備場所');
+  return readSingleColumn_(sheet, []);
 }
 
 function addMaintenanceLocation(loc) {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let sheet = ss.getSheetByName('整備場所');
-  if (!sheet) { sheet = ss.insertSheet('整備場所'); sheet.appendRow(['location']); }
-  if (!getMaintenanceLocations().includes(loc)) { sheet.appendRow([loc]); }
+  const s = ss_();
+  let sheet = s.getSheetByName('整備場所');
+  if (!sheet) { sheet = s.insertSheet('整備場所'); sheet.appendRow(['location']); }
+  const existing = sheet.getDataRange().getValues().slice(1).map(r => r[0]);
+  if (!existing.includes(loc)) sheet.appendRow([loc]);
   return { success: true };
 }
 
