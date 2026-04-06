@@ -1936,23 +1936,17 @@ function render() {
 
     document.getElementById('app').innerHTML = html;
 
+    if (state.activeTab === 'flight' && !state.isRecording && !state.loading && state._defaultDroneId) {
+        const sel = document.getElementById('flight-drone-select');
+        if (sel) {
+            sel.value = String(state._defaultDroneId);
+            onDroneSelect(String(state._defaultDroneId));
+        }
+    }
     if (!TEST_MODE) {
         if (state.activeTab === 'flight' && !state.isRecording && !state.loading) {
             setTimeout(autoFetchWeather, 0);
             setTimeout(autoFetchTakeoffAddress, 0);
-            setTimeout(function() {
-                const sel = document.getElementById('flight-drone-select');
-                if (!sel) return;
-                const droneId = String(state._defaultDroneId || '');
-                if (!droneId) return;
-                // iOS Safari対応: sel.value代入ではなく各optionのselectedを直接操作
-                let found = false;
-                Array.from(sel.options).forEach(function(opt) {
-                    if (opt.value === droneId) { opt.selected = true; found = true; }
-                    else { opt.selected = false; }
-                });
-                if (found) onDroneSelect(droneId);
-            }, 0);
         }
         if (state.activeTab === 'maintenance' && state.showMaintenanceForm && !state.loading) {
             setTimeout(autoFetchLocation, 0);
