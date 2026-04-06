@@ -2038,10 +2038,9 @@ function renderFlightTab() {
         const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
         const lastFmModes  = lastLog && lastLog.flightMode ? lastLog.flightMode.split('、') : [];
 
+        const _dbgDrone = state.drones.find(d => String(d.id) === lastDroneId);
         html += '<div id="_dbg" style="background:#fef3c7;border:1px solid #f59e0b;padding:6px 10px;margin-bottom:8px;font-size:11px;border-radius:4px;">'
-              + '🔍 DEBUG: logs=' + state.flightLogs.length
-              + ' | lastDroneId=[' + lastDroneId + ']'
-              + ' | match=' + state.drones.some(d => String(d.id) === lastDroneId)
+              + '🔍 DEBUG: 選択されるべき機体=[' + (_dbgDrone ? _dbgDrone.manufacturer + ' ' + _dbgDrone.model : 'NOT FOUND') + ']'
               + ' | sel.value=PENDING'
               + '</div>';
         html += '<h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;">新しい飛行を記録</h3>';
