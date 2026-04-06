@@ -1355,12 +1355,12 @@ function exportJourneyLogPDF() {
                 body += '<table class="report-tbl"><colgroup>'
                     + '<col style="width:7mm"><col style="width:14%"><col style="width:28%"><col style="width:14%"><col style="width:35%"><col style="width:9%">'
                     + '</colgroup><tbody>';
-                body += '<tr><td rowspan="6" class="report-label">記事<br>R<br>E<br>P<br>O<br>R<br>T</td>'
-                    + '<th>発生年月日<br><span class="en">SQUAWK DATE</span></th>'
-                    + '<th>不具合事項<br><span class="en">FLIGHT SQUAWK</span></th>'
-                    + '<th>処置年月日<br><span class="en">ACTION DATE</span></th>'
-                    + '<th>処置その他<br><span class="en">CORRECTIVE ACTION</span></th>'
-                    + '<th>確認者<br><span class="en">CONFIRMER</span></th></tr>';
+                body += '<tr><td rowspan="6" class="report-label">記事</td>'
+                    + '<th>発生年月日</th>'
+                    + '<th>不具合事項</th>'
+                    + '<th>処置年月日</th>'
+                    + '<th>処置その他</th>'
+                    + '<th>確認者</th></tr>';
                 for (let i = 0; i < 5; i++) {
                     body += '<tr><td></td><td></td><td></td><td></td><td></td></tr>';
                 }
