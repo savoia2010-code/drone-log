@@ -721,7 +721,7 @@ async function saveFlightWithPostCheck() {
                 droneId: log.droneId, date: log.date, type: '飛行後点検',
                 technician: getPilotName(log.pilotId),
                 description: '飛行後の定期点検（飛行場所: ' + log.location + '）',
-                maintenanceLocation: log.landingLocation, notes: '飛行記録から自動作成'
+                maintenanceLocation: log.landingAddress || log.landingLocation, notes: '飛行記録から自動作成'
             });
         }
         await loadData();
@@ -897,7 +897,7 @@ async function savePilotEdit() {
 
 // ─── 整備記録編集モーダル ──────────────────────────────────────────────────────
 function openMaintenanceEditModal(logId) {
-    const log = state.maintenanceLogs.find(l => l.id === logId);
+    const log = state.maintenanceLogs.find(l => String(l.id) === String(logId));
     if (!log) return;
     state.editingMaintenance = { ...log };
     state.showMaintenanceEditModal = true;
@@ -1023,7 +1023,7 @@ function onDroneSelect(droneId) {
     // 前回ヒント表示
     const hint = document.getElementById('drone-autofill-hint');
     if (hint) {
-        hint.textContent = '✔ ' + last.date + ' の記録から自動入力しました';
+        hint.textContent = '✔ ' + _pdfFmtDate(last.date) + ' の記録から自動入力しました';
         hint.style.display = 'block';
     }
 }
@@ -1238,8 +1238,9 @@ function _pdfFilteredLogs() {
     const from = state.pdfFrom;
     const to   = state.pdfTo;
     return state.flightLogs.filter(l => {
-        if (from && l.date < from) return false;
-        if (to   && l.date > to)   return false;
+        const d = String(l.date || '').slice(0, 10);
+        if (from && d < from) return false;
+        if (to   && d > to)   return false;
         return true;
     });
 }
@@ -2071,69 +2072,6 @@ function renderCheckTable(items, title, bgColor, textColor, borderColor, notesId
     return html;
 }
 
-// ─── 飛行記録カード ───────────────────────────────────────────────────────────
-function renderFlightLogCard(log) {
-    const secs = log.totalFlightSecs || secsFromStartEnd(log.startTime, log.endTime);
-    const sessionCount = log.sessions ? log.sessions.length : 1;
-
-    let html = '<div class="card"><div class="flex-between mb-2">';
-    html += '<div><h3 class="font-bold" style="font-size:1.1rem;">' + getDroneName(log.droneId) + '</h3>';
-    html += '<p class="text-gray text-sm">' + log.date + ' ／ ' + log.location + '</p></div>';
-    html += '<div class="flex gap-2" style="align-items:flex-start;">';
-    html += '<span class="badge badge-blue">実飛行 ' + calcFlightTime(secs) + '</span>';
-    if (sessionCount > 1) html += '<span class="badge badge-orange">🔋×' + sessionCount + '</span>';
-    html += '<button onclick="openEditModal(\'' + log.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
-    html += '<button onclick="deleteFlightLog(\'' + log.id + '\')" class="btn btn-danger btn-small">🗑</button>';
-    html += '</div></div>';
-
-    html += '<div class="grid grid-2 text-sm" style="margin-bottom:0.5rem;">';
-    html += '<p><span class="font-medium">操縦者:</span> ' + getPilotName(log.pilotId) + '</p>';
-    html += '<p><span class="font-medium">目的:</span> ' + log.purpose + '</p>';
-    if (log.flightMode) html += '<p style="grid-column:1/-1"><span class="font-medium">飛行形態:</span> ' + log.flightMode + '</p>';
-    html += '<p><span class="font-medium">時刻:</span> ' + (log.startTime || '-') + ' 〜 ' + (log.endTime || '-') + '</p>';
-    html += '<p><span class="font-medium">気象:</span> ' + log.weather + '</p>';
-    html += '<p><span class="font-medium">離陸場所:</span> ' + (log.takeoffAddress || '-') + '</p>';
-    html += '<p><span class="font-medium">着陸場所:</span> ' + (log.landingAddress || '-') + '</p>';
-    html += '</div>';
-    if (log.flightReport && log.flightReport !== '正常') {
-        html += '<p class="text-sm mt-1" style="color:#92400e;background:#fffbeb;padding:0.375rem 0.75rem;border-radius:0.375rem;">'
-              + '<span class="font-medium">✈ レポート:</span> ' + log.flightReport + '</p>';
-    } else if (log.flightReport) {
-        html += '<p class="text-sm mt-1 text-gray"><span class="font-medium">✈ レポート:</span> ' + log.flightReport + '</p>';
-    }
-
-    // セッション詳細
-    if (log.sessions && log.sessions.length > 1) {
-        html += '<div class="mt-2 pt-2 border-t text-sm">';
-        html += '<p class="font-medium mb-1">セッション詳細:</p>';
-        html += '<ul class="session-list">';
-        log.sessions.forEach(s => {
-            const to = s.takeoffTime || s.startTime || '-';
-            const la = s.landingTime || s.endTime   || '-';
-            html += '<li class="session-item">'
-                  + 'セッション ' + s.num + '　離陸 ' + to + ' → 着陸 ' + la
-                  + '<span class="badge badge-green">' + formatMinutes(s.elapsedSeconds) + '</span>'
-                  + '</li>';
-        });
-        html += '</ul></div>';
-    }
-
-    // 点検サマリー
-    html += '<div class="mt-2 pt-2 border-t text-sm flex gap-2" style="flex-wrap:wrap;">';
-    html += '<span><span class="font-medium">飛行前点検:</span> ' + checkSummary(log.preflightChecks, PREFLIGHT_ITEMS) + '</span>';
-    html += '<span><span class="font-medium">飛行後点検:</span> ' + checkSummary(log.postflightChecks, POSTFLIGHT_ITEMS) + '</span>';
-    html += '</div>';
-    if (log.preflightNotes || log.postflightNotes) {
-        html += '<div class="mt-2 text-sm" style="background:#fafafa;border-radius:0.375rem;padding:0.5rem 0.75rem;">';
-        if (log.preflightNotes) html += '<p><span class="font-medium">飛行前点検 特記事項:</span> ' + log.preflightNotes + '</p>';
-        if (log.postflightNotes) html += '<p' + (log.preflightNotes ? ' style="margin-top:0.25rem;"' : '') + '><span class="font-medium">飛行後点検 特記事項:</span> ' + log.postflightNotes + '</p>';
-        html += '</div>';
-    }
-
-    if (log.notes) html += '<p class="text-sm text-gray mt-2 pt-2 border-t"><span class="font-medium">備考:</span> ' + log.notes + '</p>';
-    html += '</div>';
-    return html;
-}
 
 // ─── 飛行後点検モーダル ───────────────────────────────────────────────────────
 function renderPostFlightModal() {
@@ -2410,7 +2348,7 @@ function renderMaintenanceEditModal() {
     html += '<div class="grid grid-2">';
     html += '<div class="form-group"><label class="label">機体</label><select id="me-drone" class="select">';
     state.drones.forEach(d => {
-        html += '<option value="' + d.id + '"' + (m.droneId === d.id ? ' selected' : '') + '>' + d.manufacturer + ' ' + d.model + '</option>';
+        html += '<option value="' + d.id + '"' + (String(m.droneId) === String(d.id) ? ' selected' : '') + '>' + d.manufacturer + ' ' + d.model + '</option>';
     });
     html += '</select></div>';
     html += '<div class="form-group"><label class="label">整備日</label><input type="date" id="me-date" class="input" value="' + (m.date||'') + '" /></div>';
@@ -2566,7 +2504,7 @@ function renderMaintenanceTab() {
     logs.forEach(log => {
         html += '<div class="card"><div class="flex-between mb-2"><div>';
         html += '<h3 class="font-bold" style="font-size:1.1rem;">' + getDroneName(log.droneId) + '</h3>';
-        html += '<p class="text-gray text-sm">' + log.date + '</p></div>';
+        html += '<p class="text-gray text-sm">' + _pdfFmtDate(log.date) + '</p></div>';
         html += '<div class="flex gap-2" style="align-items:center;">';
         html += '<span class="badge badge-green">' + log.type + '</span>';
         html += '<button onclick="openMaintenanceEditModal(\'' + log.id + '\')" class="btn btn-secondary btn-small">✏ 編集</button>';
@@ -2575,7 +2513,7 @@ function renderMaintenanceTab() {
         html += '<div class="text-sm"><p><span class="font-medium">作業者:</span> ' + log.technician + '</p>';
         if (log.maintenanceLocation) html += '<p><span class="font-medium">場所:</span> ' + log.maintenanceLocation + '</p>';
         html += '<p class="mt-2"><span class="font-medium">内容:</span> ' + log.description + '</p></div>';
-        if (log.nextDate) html += '<p class="text-sm mt-2" style="color:#2563eb;">次回整備予定: ' + log.nextDate + '</p>';
+        if (log.nextDate) html += '<p class="text-sm mt-2" style="color:#2563eb;">次回整備予定: ' + _pdfFmtDate(log.nextDate) + '</p>';
         if (log.notes) html += '<p class="text-sm text-gray mt-2 pt-2 border-t"><span class="font-medium">備考:</span> ' + log.notes + '</p>';
         html += '</div>';
     });
@@ -2609,7 +2547,7 @@ function renderDronesTab() {
     html += '<div class="grid grid-2">';
     state.drones.forEach(d => {
         // この機体の総飛行時間・飛行回数を集計
-        const droneLogs = state.flightLogs.filter(l => l.droneId === d.id);
+        const droneLogs = state.flightLogs.filter(l => String(l.droneId) === String(d.id));
         const appSecs   = droneLogs.reduce((sum, l) => sum + (l.totalFlightSecs || 0), 0);
         const preRegSecs = (d.preRegistrationMins || 0) * 60;
         const totalSecs  = appSecs + preRegSecs;
@@ -2635,7 +2573,7 @@ function renderDronesTab() {
         html += '<div style="font-size:0.7rem;color:#6b7280;">飛行回数</div>';
         html += '</div>';
         html += '<div style="text-align:center;">';
-        html += '<div style="font-size:0.85rem;font-weight:600;color:#374151;">' + (lastFlight ? lastFlight.date : '—') + '</div>';
+        html += '<div style="font-size:0.85rem;font-weight:600;color:#374151;">' + (lastFlight ? _pdfFmtDate(lastFlight.date) : '—') + '</div>';
         html += '<div style="font-size:0.7rem;color:#6b7280;">最終飛行</div>';
         html += '</div></div>';
         // 内訳（登録前時間がある場合のみ表示）
@@ -2650,8 +2588,8 @@ function renderDronesTab() {
         html += '<p><span class="font-medium">製造番号:</span> ' + d.serialNumber + '</p>';
         if (d.registrationNumber) html += '<p><span class="font-medium">登録記号:</span> ' + d.registrationNumber + '</p>';
         html += '<p><span class="font-medium">重量:</span> ' + d.weight + 'g</p>';
-        html += '<p><span class="font-medium">購入日:</span> ' + d.purchaseDate + '</p>';
-        if (d.appRegisteredDate) html += '<p><span class="font-medium">アプリ登録日:</span> ' + d.appRegisteredDate + '</p>';
+        html += '<p><span class="font-medium">購入日:</span> ' + _pdfFmtDate(d.purchaseDate) + '</p>';
+        if (d.appRegisteredDate) html += '<p><span class="font-medium">アプリ登録日:</span> ' + _pdfFmtDate(d.appRegisteredDate) + '</p>';
         html += '</div></div>';
     });
     html += '</div>';
@@ -2706,13 +2644,13 @@ function renderPilotsTab() {
         html += '<p><span class="font-medium">技能証明:</span> ' + pilot.licenseType + '</p>';
         if (pilot.licenseNumber) html += '<p><span class="font-medium">証明番号:</span> ' + pilot.licenseNumber + '</p>';
         if (pilot.expiryDate) {
-            const days = Math.floor((new Date(pilot.expiryDate) - new Date()) / 86400000);
-            html += '<p><span class="font-medium">有効期限:</span> ' + pilot.expiryDate;
+            const days = Math.floor((new Date(String(pilot.expiryDate).slice(0,10)) - new Date()) / 86400000);
+            html += '<p><span class="font-medium">有効期限:</span> ' + _pdfFmtDate(pilot.expiryDate);
             if (days < 0) html += ' <span style="color:#dc2626;">(期限切れ)</span>';
             else if (days < 30) html += ' <span style="color:#f59e0b;">(残り' + days + '日)</span>';
             html += '</p>';
         }
-        html += '<p><span class="font-medium">生年月日:</span> ' + pilot.birthDate + '</p>';
+        html += '<p><span class="font-medium">生年月日:</span> ' + _pdfFmtDate(pilot.birthDate) + '</p>';
         if (pilot.phone) html += '<p><span class="font-medium">電話:</span> ' + pilot.phone + '</p>';
         if (pilot.limitations) {
             const limits = [];
