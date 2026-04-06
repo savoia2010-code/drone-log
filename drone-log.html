@@ -1385,7 +1385,9 @@ function exportJourneyLogPDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7pt;color:#000;background:#fff;}
 @page{size:A4 landscape;margin:8mm 10mm 8mm;}
-@media print{.page{page-break-after:always;page-break-inside:avoid;}}
+.close-btn-bar{text-align:center;padding:8px;background:#eff6ff;border-bottom:1px solid #bfdbfe;margin-bottom:4px;}
+.close-btn-bar button{background:#1e40af;color:#fff;border:none;border-radius:6px;padding:10px 28px;font-size:15px;cursor:pointer;}
+@media print{.page{page-break-after:always;page-break-inside:avoid;}.close-btn-bar{display:none;}}
 .page{width:100%;margin-bottom:0;}
 /* タイトル行 */
 .form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
@@ -1427,7 +1429,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:9999;"><button onclick="if(window.opener)window.opener.focus();window.close();" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);">✕ 閉じてアプリに戻る</button></div>'
+        + '<div class="close-btn-bar"><button onclick="if(window.opener)window.opener.focus();window.close();">✕ 閉じてアプリに戻る</button></div>'
         + '<script>window.addEventListener("afterprint",function(){if(window.opener)window.opener.focus();window.close();});window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
@@ -1531,7 +1533,9 @@ function exportInspectionPDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
 @page{size:A4 portrait;margin:8mm 10mm 8mm;}
-@media print{.page{page-break-after:always;page-break-inside:avoid;}}
+.close-btn-bar{text-align:center;padding:8px;background:#eff6ff;border-bottom:1px solid #bfdbfe;margin-bottom:4px;}
+.close-btn-bar button{background:#1e40af;color:#fff;border:none;border-radius:6px;padding:10px 28px;font-size:15px;cursor:pointer;}
+@media print{.page{page-break-after:always;page-break-inside:avoid;}.close-btn-bar{display:none;}}
 .page{width:100%;}
 /* タイトル */
 .form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
@@ -1570,7 +1574,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:9999;"><button onclick="if(window.opener)window.opener.focus();window.close();" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);">✕ 閉じてアプリに戻る</button></div>'
+        + '<div class="close-btn-bar"><button onclick="if(window.opener)window.opener.focus();window.close();">✕ 閉じてアプリに戻る</button></div>'
         + '<script>window.addEventListener("afterprint",function(){if(window.opener)window.opener.focus();window.close();});window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
@@ -1677,7 +1681,9 @@ function exportDailyInspLandscapePDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7pt;color:#000;background:#fff;}
 @page{size:A4 landscape;margin:8mm 10mm 8mm;}
-@media print{.page{page-break-after:always;page-break-inside:avoid;}}
+.close-btn-bar{text-align:center;padding:8px;background:#eff6ff;border-bottom:1px solid #bfdbfe;margin-bottom:4px;}
+.close-btn-bar button{background:#1e40af;color:#fff;border:none;border-radius:6px;padding:10px 28px;font-size:15px;cursor:pointer;}
+@media print{.page{page-break-after:always;page-break-inside:avoid;}.close-btn-bar{display:none;}}
 .page{width:100%;}
 .page-title{font-size:10pt;font-weight:900;text-align:center;border-bottom:1pt solid #000;padding-bottom:1mm;margin-bottom:1.5mm;}
 .info-tbl{width:100%;border-collapse:collapse;font-size:6pt;margin-bottom:1.5mm;table-layout:fixed;}
@@ -1701,7 +1707,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '') + '〜' + (state.pdfTo || '') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録（一覧）' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:9999;"><button onclick="if(window.opener)window.opener.focus();window.close();" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);">✕ 閉じてアプリに戻る</button></div>'
+        + '<div class="close-btn-bar"><button onclick="if(window.opener)window.opener.focus();window.close();">✕ 閉じてアプリに戻る</button></div>'
         + '<script>window.addEventListener("afterprint",function(){if(window.opener)window.opener.focus();window.close();});window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
@@ -1792,7 +1798,9 @@ function exportMaintenancePDF() {
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;font-size:7.5pt;color:#000;background:#fff;}
 @page{size:A4 portrait;margin:8mm 10mm 8mm;}
-@media print{.page{page-break-after:always;page-break-inside:avoid;}}
+.close-btn-bar{text-align:center;padding:8px;background:#eff6ff;border-bottom:1px solid #bfdbfe;margin-bottom:4px;}
+.close-btn-bar button{background:#1e40af;color:#fff;border:none;border-radius:6px;padding:10px 28px;font-size:15px;cursor:pointer;}
+@media print{.page{page-break-after:always;page-break-inside:avoid;}.close-btn-bar{display:none;}}
 .page{width:100%;}
 /* タイトル */
 .form-title{display:flex;align-items:baseline;gap:3mm;border-bottom:1pt solid #000;padding-bottom:0.8mm;margin-bottom:1mm;}
@@ -1825,7 +1833,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>整備記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:9999;"><button onclick="if(window.opener)window.opener.focus();window.close();" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:12px 24px;font-size:16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.3);">✕ 閉じてアプリに戻る</button></div>'
+        + '<div class="close-btn-bar"><button onclick="if(window.opener)window.opener.focus();window.close();">✕ 閉じてアプリに戻る</button></div>'
         + '<script>window.addEventListener("afterprint",function(){if(window.opener)window.opener.focus();window.close();});window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
