@@ -1429,8 +1429,8 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="close-btn-bar"><button onclick="try{open(\'about:blank\',\'_self\');close();}catch(e){close();}">✕ 閉じてアプリに戻る</button></div>'
-        + '<script>window.addEventListener("afterprint",function(){try{open("about:blank","_self");close();}catch(e){close();}});window.addEventListener("load",function(){window.print();});<\/script>'
+        + '<div class="close-btn-bar"><button onclick="goBack()">✕ アプリに戻る</button></div>'
+        + '<script>function goBack(){var u=window.opener&&window.opener.location?window.opener.location.href:null;if(u){window.location.href=u;}else{try{window.close();}catch(e){}}}window.addEventListener("afterprint",goBack);window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1574,8 +1574,8 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="close-btn-bar"><button onclick="try{open(\'about:blank\',\'_self\');close();}catch(e){close();}">✕ 閉じてアプリに戻る</button></div>'
-        + '<script>window.addEventListener("afterprint",function(){try{open("about:blank","_self");close();}catch(e){close();}});window.addEventListener("load",function(){window.print();});<\/script>'
+        + '<div class="close-btn-bar"><button onclick="goBack()">✕ アプリに戻る</button></div>'
+        + '<script>function goBack(){var u=window.opener&&window.opener.location?window.opener.location.href:null;if(u){window.location.href=u;}else{try{window.close();}catch(e){}}}window.addEventListener("afterprint",goBack);window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1707,8 +1707,8 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '') + '〜' + (state.pdfTo || '') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録（一覧）' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="close-btn-bar"><button onclick="try{open(\'about:blank\',\'_self\');close();}catch(e){close();}">✕ 閉じてアプリに戻る</button></div>'
-        + '<script>window.addEventListener("afterprint",function(){try{open("about:blank","_self");close();}catch(e){close();}});window.addEventListener("load",function(){window.print();});<\/script>'
+        + '<div class="close-btn-bar"><button onclick="goBack()">✕ アプリに戻る</button></div>'
+        + '<script>function goBack(){var u=window.opener&&window.opener.location?window.opener.location.href:null;if(u){window.location.href=u;}else{try{window.close();}catch(e){}}}window.addEventListener("afterprint",goBack);window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1833,8 +1833,8 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>整備記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<div class="close-btn-bar"><button onclick="try{open(\'about:blank\',\'_self\');close();}catch(e){close();}">✕ 閉じてアプリに戻る</button></div>'
-        + '<script>window.addEventListener("afterprint",function(){try{open("about:blank","_self");close();}catch(e){close();}});window.addEventListener("load",function(){window.print();});<\/script>'
+        + '<div class="close-btn-bar"><button onclick="goBack()">✕ アプリに戻る</button></div>'
+        + '<script>function goBack(){var u=window.opener&&window.opener.location?window.opener.location.href:null;if(u){window.location.href=u;}else{try{window.close();}catch(e){}}}window.addEventListener("afterprint",goBack);window.addEventListener("load",function(){window.print();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
