@@ -475,9 +475,9 @@ async function startFlight() {
     const purpose = purposeSelect === 'その他' ? purposeCustom : purposeSelect;
     const weather = document.getElementById('flight-weather-input').value;
     const flightModeItems = [
-        ['fm_01','目視内飛行'],['fm_02','目視外飛行'],['fm_03','夜間飛行'],
-        ['fm_04','人口集中地区（DID）上空'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
-        ['fm_07','危険物輸送'],['fm_08','物件投下'],['fm_09','人又は物件から30m未満'],
+        ['fm_01','人又は物件から30m未満'],['fm_02','目視外飛行'],['fm_03','人口集中地区（DID）上空'],
+        ['fm_04','夜間飛行'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
+        ['fm_07','危険物輸送'],['fm_08','物件投下'],
     ];
     const checkedModes = flightModeItems.filter(([id]) => document.getElementById(id)?.checked).map(([,label]) => label);
     const otherText = document.getElementById('fm_other_text')?.value.trim();
@@ -752,9 +752,9 @@ async function saveEdit() {
 
     // 飛行形態
     const FM_LABELS = [
-        ['edit_fm_01','目視内飛行'],['edit_fm_02','目視外飛行'],['edit_fm_03','夜間飛行'],
-        ['edit_fm_04','人口集中地区（DID）上空'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
-        ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下'],['edit_fm_09','人又は物件から30m未満'],
+        ['edit_fm_01','人又は物件から30m未満'],['edit_fm_02','目視外飛行'],['edit_fm_03','人口集中地区（DID）上空'],
+        ['edit_fm_04','夜間飛行'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
+        ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下'],
     ];
     const flightMode = FM_LABELS.filter(([id]) => { const el = document.getElementById(id); return el && el.checked; }).map(([, l]) => l).join('、');
 
@@ -1010,9 +1010,9 @@ function onDroneSelect(droneId) {
 
     // 飛行形態
     const FM_LABELS = [
-        ['fm_01','目視内飛行'],['fm_02','目視外飛行'],['fm_03','夜間飛行'],
-        ['fm_04','人口集中地区（DID）上空'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
-        ['fm_07','危険物輸送'],['fm_08','物件投下'],['fm_09','人又は物件から30m未満'],
+        ['fm_01','人又は物件から30m未満'],['fm_02','目視外飛行'],['fm_03','人口集中地区（DID）上空'],
+        ['fm_04','夜間飛行'],['fm_05','高度150m以上'],['fm_06','催し場所上空'],
+        ['fm_07','危険物輸送'],['fm_08','物件投下'],
     ];
     if (last.flightMode) {
         const modes = last.flightMode.split('、');
@@ -1895,15 +1895,14 @@ function renderFlightTab() {
         html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態（特定飛行）</p>';
         html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;margin-bottom:0.75rem;">';
         [
-            ['fm_01', '目視内飛行'],
+            ['fm_01', '人又は物件から30m未満'],
             ['fm_02', '目視外飛行'],
-            ['fm_03', '夜間飛行'],
-            ['fm_04', '人口集中地区（DID）上空'],
+            ['fm_03', '人口集中地区（DID）上空'],
+            ['fm_04', '夜間飛行'],
             ['fm_05', '高度150m以上'],
             ['fm_06', '催し場所上空'],
             ['fm_07', '危険物輸送'],
             ['fm_08', '物件投下'],
-            ['fm_09', '人又は物件から30m未満'],
         ].forEach(([id, label]) => {
             html += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">'
                   + '<input type="checkbox" id="' + id + '" class="checkbox"' + (lastFmModes.includes(label) ? ' checked' : '') + ' /> ' + label + '</label>';
@@ -2113,9 +2112,9 @@ function renderEditModal() {
     html += '<div style="border:1px solid #e5e7eb;border-radius:0.5rem;padding:1rem;margin-bottom:1rem;">';
     html += '<p class="font-bold" style="margin-bottom:0.75rem;color:#374151;">飛行形態（特定飛行）</p>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.5rem;">';
-    [['edit_fm_01','目視内飛行'],['edit_fm_02','目視外飛行'],['edit_fm_03','夜間飛行'],
-     ['edit_fm_04','人口集中地区（DID）上空'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
-     ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下'],['edit_fm_09','人又は物件から30m未満']
+    [['edit_fm_01','人又は物件から30m未満'],['edit_fm_02','目視外飛行'],['edit_fm_03','人口集中地区（DID）上空'],
+     ['edit_fm_04','夜間飛行'],['edit_fm_05','高度150m以上'],['edit_fm_06','催し場所上空'],
+     ['edit_fm_07','危険物輸送'],['edit_fm_08','物件投下']
     ].forEach(([id, label]) => {
         html += '<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;"><input type="checkbox" id="' + id + '" class="checkbox"' + (fmCurrent.includes(label) ? ' checked' : '') + ' /> ' + label + '</label>';
     });
