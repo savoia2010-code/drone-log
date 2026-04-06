@@ -1332,7 +1332,7 @@ function exportJourneyLogPDF() {
                     const onTime  = sessions[sessions.length-1] ? (sessions[sessions.length-1].landingTime || l.endTime || '') : (l.endTime || '');
                     const safety = l.flightReport && l.flightReport !== '正常' ? l.flightReport : '';
                     body += '<tr' + (safety ? ' class="safety-row"' : '') + '>'
-                        + '<td class="tc">' + e(_pdfFmtYMD(l.date)) + '</td>'
+                        + '<td class="tc">' + e(_pdfFmtDate(l.date)) + '</td>'
                         + '<td>' + e(pilot.name || '') + '</td>'
                         + '<td>' + e(l.purpose || '') + '</td>'
                         + '<td class="place">' + e(from) + '</td>'
