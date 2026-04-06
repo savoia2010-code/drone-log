@@ -1280,8 +1280,11 @@ function exportJourneyLogPDF() {
         let cumSecs = 0;
         rows.forEach(r => { cumSecs += r.secs; r.cumSecs = cumSecs; });
 
+        // 記録のない機体はスキップ
+        if (rows.length === 0) return;
+
         // ページ分割
-        const totalPages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+        const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
         for (let pg = 0; pg < totalPages; pg++) {
             const pageRows = rows.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
             const isLastDronePage = pg === totalPages - 1;
@@ -1370,18 +1373,13 @@ function exportJourneyLogPDF() {
             body += '</div>'; // .page
         }
 
-        if (rows.length === 0) {
-            body += '<div class="page">';
-            body += '<div class="form-title">';
-            body += '<span class="form-num">（様式１）飛行記録</span>';
-            body += '<span class="form-ja">無人航空機の飛行記録</span>';
-            body += '<span class="form-nr">（NR.1）</span>';
-            body += '</div>';
-            body += _pdfMachineRow(drone);
-            body += '<p style="text-align:center;color:#888;margin:8mm 0;">飛行記録がありません</p>';
-            body += '</div>';
-        }
     });
+
+    if (!body) {
+        w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録</title></head><body style="font-family:sans-serif;padding:20px;"><p>出力対象の飛行記録がありません。</p></body></html>');
+        w.document.close();
+        return;
+    }
 
     const css = `
 *{margin:0;padding:0;box-sizing:border-box;}
