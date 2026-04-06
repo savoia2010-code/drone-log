@@ -1938,9 +1938,15 @@ function render() {
 
     if (state.activeTab === 'flight' && !state.isRecording && !state.loading && state._defaultDroneId) {
         const sel = document.getElementById('flight-drone-select');
+        const dbg = document.getElementById('_dbg');
         if (sel) {
+            const before = sel.value;
             sel.value = String(state._defaultDroneId);
+            const after = sel.value;
+            if (dbg) dbg.textContent += ' | before=[' + before + '] after=[' + after + '] options=' + sel.options.length;
             onDroneSelect(String(state._defaultDroneId));
+        } else {
+            if (dbg) dbg.textContent += ' | sel=NOT FOUND';
         }
     }
     if (!TEST_MODE) {
@@ -2032,11 +2038,11 @@ function renderFlightTab() {
         const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
         const lastFmModes  = lastLog && lastLog.flightMode ? lastLog.flightMode.split('、') : [];
 
-        html += '<div style="background:#fef3c7;border:1px solid #f59e0b;padding:6px 10px;margin-bottom:8px;font-size:11px;border-radius:4px;">'
+        html += '<div id="_dbg" style="background:#fef3c7;border:1px solid #f59e0b;padding:6px 10px;margin-bottom:8px;font-size:11px;border-radius:4px;">'
               + '🔍 DEBUG: logs=' + state.flightLogs.length
               + ' | lastDroneId=[' + lastDroneId + ']'
-              + ' | drones=[' + state.drones.map(d => String(d.id)).join(',') + ']'
               + ' | match=' + state.drones.some(d => String(d.id) === lastDroneId)
+              + ' | sel.value=PENDING'
               + '</div>';
         html += '<h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;">新しい飛行を記録</h3>';
         html += '<div class="grid grid-2" style="max-width:800px;margin:0 auto 1.5rem;">';
