@@ -1442,9 +1442,10 @@ function exportInspectionPDF() {
     let body = '';
 
     logs.forEach((l, idx) => {
-        const drone  = state.drones.find(d => String(d.id) === String(l.droneId)) || {};
-        const pilot  = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
-        const pfChecks = _pdfParseChecks(l.preflightChecks);
+        const drone     = state.drones.find(d => String(d.id) === String(l.droneId)) || {};
+        const pilot     = state.pilots.find(p => String(p.id) === String(l.pilotId)) || {};
+        const pfChecks  = _pdfParseChecks(l.preflightChecks);
+        const poChecks  = _pdfParseChecks(l.postflightChecks);
 
         body += '<div class="page">';
 
@@ -1458,19 +1459,23 @@ function exportInspectionPDF() {
         // 機体情報
         body += _pdfMachineRow(drone);
 
-        // 点検テーブル
+        // 点検テーブル（飛行前・飛行後 区分列付き）
         body += '<table class="insp-tbl"><thead><tr>'
             + '<th class="tc">No.</th>'
+            + '<th class="kubun-cell">区分</th>'
             + '<th class="item-cell">点検項目</th>'
             + '<th class="desc-cell">点検内容</th>'
             + '<th class="result-cell">結果</th>'
             + '<th class="remarks-cell">備考</th>'
             + '</tr></thead><tbody>';
 
-        PREFLIGHT_ITEMS.slice(0, 9).forEach((item, i) => {
+        // ── 飛行前点検
+        body += '<tr><td colspan="6" class="section-hd">飛行前点検</td></tr>';
+        PREFLIGHT_ITEMS.forEach((item, i) => {
             const ok = pfChecks[item.id] !== false;
             body += '<tr>'
                 + '<td class="tc">' + (i + 1) + '</td>'
+                + '<td class="kubun-cell">飛行前</td>'
                 + '<td class="item-cell">' + e(item.label) + '</td>'
                 + '<td class="desc-cell">' + e(item.desc) + '</td>'
                 + '<td class="result-cell ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '正常' : '異常') + '</td>'
@@ -1478,17 +1483,29 @@ function exportInspectionPDF() {
                 + '</tr>';
         });
 
-        // 予備行（2行）
-        for (let i = 0; i < 2; i++) {
-            body += '<tr><td class="tc">' + (10 + i) + '</td><td class="item-cell"></td><td class="desc-cell"></td><td class="result-cell"></td><td class="remarks-cell"></td></tr>';
-        }
+        // ── 飛行後点検
+        body += '<tr><td colspan="6" class="section-hd">飛行後点検</td></tr>';
+        POSTFLIGHT_ITEMS.forEach((item, i) => {
+            const ok = poChecks[item.id] !== false;
+            body += '<tr>'
+                + '<td class="tc">' + (i + 1) + '</td>'
+                + '<td class="kubun-cell">飛行後</td>'
+                + '<td class="item-cell">' + e(item.label) + '</td>'
+                + '<td class="desc-cell">' + e(item.desc) + '</td>'
+                + '<td class="result-cell ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '正常' : '異常') + '</td>'
+                + '<td class="remarks-cell">' + (ok ? '' : e('要確認')) + '</td>'
+                + '</tr>';
+        });
 
         body += '</tbody></table>';
 
         // 特記事項
         body += '<div class="notes-box">';
         body += '<div class="notes-title">特記事項</div>';
-        body += '<div class="notes-content">' + e(l.preflightNotes || '') + '</div>';
+        body += '<div class="notes-content">';
+        if (l.preflightNotes)  body += '<p><strong>飛行前:</strong> ' + e(l.preflightNotes) + '</p>';
+        if (l.postflightNotes) body += '<p><strong>飛行後:</strong> ' + e(l.postflightNotes) + '</p>';
+        body += '</div>';
         body += '</div>';
 
         // フッター
@@ -1529,19 +1546,22 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
 .mach-tbl td{border:0.5pt solid #000;padding:0.5mm 1mm;text-align:left;width:13%;}
 .mach-tbl small{font-size:5pt;display:block;}
 /* 点検テーブル */
-.insp-tbl{width:100%;border-collapse:collapse;font-size:7.5pt;margin-bottom:1.5mm;table-layout:fixed;}
-.insp-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1.5mm;text-align:center;font-weight:700;line-height:1.3;}
-.insp-tbl td{border:0.5pt solid #000;padding:0.8mm 1.5mm;vertical-align:middle;line-height:1.3;}
-.insp-tbl .tc{text-align:center;width:7%;}
-.insp-tbl .item-cell{width:23%;}
-.insp-tbl .desc-cell{width:40%;font-size:6.5pt;color:#222;}
-.insp-tbl .result-cell{text-align:center;font-size:7.5pt;font-weight:700;width:10%;}
-.insp-tbl .remarks-cell{width:20%;font-size:7pt;}
+.insp-tbl{width:100%;border-collapse:collapse;font-size:7pt;margin-bottom:1.5mm;table-layout:fixed;}
+.insp-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.6mm 1mm;text-align:center;font-weight:700;line-height:1.2;}
+.insp-tbl td{border:0.5pt solid #000;padding:0.6mm 1mm;vertical-align:middle;line-height:1.2;}
+.insp-tbl .tc{text-align:center;width:6%;}
+.insp-tbl .kubun-cell{text-align:center;width:8%;font-size:6.5pt;font-weight:700;}
+.insp-tbl .item-cell{width:20%;}
+.insp-tbl .desc-cell{width:38%;font-size:6pt;color:#222;}
+.insp-tbl .result-cell{text-align:center;font-size:7pt;font-weight:700;width:10%;}
+.insp-tbl .remarks-cell{width:18%;font-size:6.5pt;}
+.insp-tbl .section-hd{background:#dbeafe;color:#1e40af;font-weight:700;font-size:7pt;padding:0.5mm 1.5mm;}
 .en-label{font-size:6pt;color:#555;display:block;}
 /* 特記事項 */
 .notes-box{border:0.5pt solid #000;margin-bottom:1.5mm;}
 .notes-title{background:#e8e8e8;border-bottom:0.5pt solid #000;padding:0.8mm 1.5mm;font-weight:700;font-size:7.5pt;}
-.notes-content{padding:1.5mm;min-height:18mm;font-size:7.5pt;}
+.notes-content{padding:1.5mm;min-height:10mm;font-size:7pt;}
+.notes-content p{margin-bottom:0.5mm;}
 /* フッター */
 .footer-tbl{width:100%;border-collapse:collapse;font-size:7.5pt;}
 .footer-tbl th{background:#e8e8e8;border:0.5pt solid #000;padding:0.8mm 1.5mm;text-align:center;font-weight:700;white-space:nowrap;width:15%;}
@@ -1611,7 +1631,8 @@ function exportDailyInspLandscapePDF() {
             for (let i = 0; i < blank; i++) body += '<td class="dc pl"></td>';
             body += '</tr>';
 
-            // 点検項目（9項目）
+            // ── 飛行前点検セクション
+            body += '<tr><td class="sec-hd" colspan="' + (COLS + 1) + '">飛行前点検</td></tr>';
             PREFLIGHT_ITEMS.forEach(item => {
                 body += '<tr><td class="lc">' + e(item.label) + '</td>';
                 pageLogs.forEach(l => {
@@ -1622,9 +1643,27 @@ function exportDailyInspLandscapePDF() {
                 body += '</tr>';
             });
 
-            // 備考
-            body += '<tr><td class="lc rh">備考</td>';
+            // ── 飛行後点検セクション
+            body += '<tr><td class="sec-hd" colspan="' + (COLS + 1) + '">飛行後点検</td></tr>';
+            POSTFLIGHT_ITEMS.forEach(item => {
+                body += '<tr><td class="lc">' + e(item.label) + '</td>';
+                pageLogs.forEach(l => {
+                    const ok = _pdfParseChecks(l.postflightChecks)[item.id] !== false;
+                    body += '<td class="dc rc ' + (ok ? 'ok' : 'ng') + '">' + (ok ? '正常' : '異常') + '</td>';
+                });
+                for (let i = 0; i < blank; i++) body += '<td class="dc rc"></td>';
+                body += '</tr>';
+            });
+
+            // 備考（飛行前）
+            body += '<tr><td class="lc rh">備考（飛行前）</td>';
             pageLogs.forEach(l => { body += '<td class="dc rem">' + e(l.preflightNotes || '') + '</td>'; });
+            for (let i = 0; i < blank; i++) body += '<td class="dc rem"></td>';
+            body += '</tr>';
+
+            // 備考（飛行後）
+            body += '<tr><td class="lc rh">備考（飛行後）</td>';
+            pageLogs.forEach(l => { body += '<td class="dc rem">' + e(l.postflightNotes || '') + '</td>'; });
             for (let i = 0; i < blank; i++) body += '<td class="dc rem"></td>';
             body += '</tr>';
 
@@ -1649,13 +1688,14 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
 .insp-tbl{width:100%;border-collapse:collapse;font-size:6.5pt;table-layout:fixed;}
 .insp-tbl th,.insp-tbl td{border:0.5pt solid #000;vertical-align:middle;}
 .insp-tbl th{background:#e8e8e8;padding:0.4mm 0.5mm;text-align:center;font-weight:700;font-size:6pt;}
-.lc{width:50pt;padding:0.4mm 1.5mm;font-size:6.5pt;}
+.lc{width:50pt;padding:0.3mm 1.5mm;font-size:6pt;}
 .rh{font-weight:700;background:#f5f5f5;}
-.dc{text-align:center;padding:0.3mm 0.5mm;font-size:6pt;}
-.dt{font-size:5.5pt;word-break:break-all;height:7mm;}
-.pl{font-size:5.5pt;word-break:break-all;height:8mm;vertical-align:top;text-align:left;padding:0.5mm;}
-.rc{font-size:6pt;font-weight:700;height:5mm;}
-.rem{height:10mm;text-align:left;font-size:5.5pt;vertical-align:top;padding:0.5mm;}
+.sec-hd{background:#dbeafe;color:#1e40af;font-weight:700;font-size:6pt;padding:0.3mm 1.5mm;text-align:left;}
+.dc{text-align:center;padding:0.2mm 0.3mm;font-size:5.5pt;}
+.dt{font-size:5pt;word-break:break-all;height:6mm;}
+.pl{font-size:5pt;word-break:break-all;height:7mm;vertical-align:top;text-align:left;padding:0.3mm;}
+.rc{font-size:5.5pt;font-weight:700;height:4mm;}
+.rem{height:7mm;text-align:left;font-size:5pt;vertical-align:top;padding:0.3mm;}
 .ok{color:#000;}.ng{color:#dc2626;background:#fee2e2;}
 `;
 
