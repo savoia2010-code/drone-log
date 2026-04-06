@@ -1643,6 +1643,12 @@ function exportDailyInspLandscapePDF() {
                 body += '</tr>';
             });
 
+            // 備考（飛行前）← 飛行後点検の上
+            body += '<tr><td class="lc rh">備考（飛行前）</td>';
+            pageLogs.forEach(l => { body += '<td class="dc rem">' + e(l.preflightNotes || '') + '</td>'; });
+            for (let i = 0; i < blank; i++) body += '<td class="dc rem"></td>';
+            body += '</tr>';
+
             // ── 飛行後点検セクション
             body += '<tr><td class="sec-hd" colspan="' + (COLS + 1) + '">飛行後点検</td></tr>';
             POSTFLIGHT_ITEMS.forEach(item => {
@@ -1654,12 +1660,6 @@ function exportDailyInspLandscapePDF() {
                 for (let i = 0; i < blank; i++) body += '<td class="dc rc"></td>';
                 body += '</tr>';
             });
-
-            // 備考（飛行前）
-            body += '<tr><td class="lc rh">備考（飛行前）</td>';
-            pageLogs.forEach(l => { body += '<td class="dc rem">' + e(l.preflightNotes || '') + '</td>'; });
-            for (let i = 0; i < blank; i++) body += '<td class="dc rem"></td>';
-            body += '</tr>';
 
             // 備考（飛行後）
             body += '<tr><td class="lc rh">備考（飛行後）</td>';
@@ -1688,10 +1688,10 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
 .insp-tbl{width:100%;border-collapse:collapse;font-size:6.5pt;table-layout:fixed;}
 .insp-tbl th,.insp-tbl td{border:0.5pt solid #000;vertical-align:middle;}
 .insp-tbl th{background:#e8e8e8;padding:0.4mm 0.5mm;text-align:center;font-weight:700;font-size:6pt;}
-.lc{width:50pt;padding:0.3mm 1.5mm;font-size:6pt;}
+.lc{width:50pt;padding:0.3mm 1.5mm;font-size:6pt;border:0.5pt solid #000;}
 .rh{font-weight:700;background:#f5f5f5;}
-.sec-hd{background:#dbeafe;color:#1e40af;font-weight:700;font-size:6pt;padding:0.3mm 1.5mm;text-align:left;}
-.dc{text-align:center;padding:0.2mm 0.3mm;font-size:5.5pt;}
+.sec-hd{background:#dbeafe;color:#1e40af;font-weight:700;font-size:6pt;padding:0.3mm 1.5mm;text-align:left;border:0.5pt solid #000;}
+.dc{text-align:center;padding:0.2mm 0.3mm;font-size:5.5pt;border:0.5pt solid #000;}
 .dt{font-size:5pt;word-break:break-all;height:6mm;}
 .pl{font-size:5pt;word-break:break-all;height:7mm;vertical-align:top;text-align:left;padding:0.3mm;}
 .rc{font-size:5.5pt;font-weight:700;height:4mm;}
