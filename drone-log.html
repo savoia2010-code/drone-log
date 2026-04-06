@@ -962,8 +962,15 @@ async function addPilot(pilot) {
 }
 async function addDrone(drone) {
     state.loading = true; render();
-    try { await callGAS('addDrone', drone); await loadData(); state.showDroneForm = false; }
-    catch(e) { alert('機体の追加に失敗: ' + e.message); state.loading = false; render(); }
+    try {
+        await callGAS('addDrone', drone);
+        await loadData();
+        state.showDroneForm = false;
+    } catch(e) {
+        console.error('addDrone error:', e);
+        alert('機体の追加に失敗しました。\n\nエラー: ' + e.message + '\n\n（ブラウザのコンソールに詳細が表示されています）');
+        state.loading = false; render();
+    }
 }
 async function addMaintenanceLog(log) {
     state.loading = true; render();
