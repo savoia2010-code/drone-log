@@ -1720,7 +1720,7 @@ function exportMaintenancePDF() {
     const e = _pdfEsc;
 
     // 期間フィルター（整備日で絞り込み）
-    let allLogs = [...state.maintenanceLogs].reverse(); // 古い順
+    let allLogs = [...state.maintenanceLogs].reverse().filter(l => l.type !== '飛行後点検'); // 古い順・飛行後点検除外
     if (state.pdfFrom) allLogs = allLogs.filter(l => String(l.date).slice(0,10) >= state.pdfFrom);
     if (state.pdfTo)   allLogs = allLogs.filter(l => String(l.date).slice(0,10) <= state.pdfTo);
 
@@ -2514,7 +2514,7 @@ function renderLogSummaryCard(log) {
 
 // ─── 整備記録タブ ─────────────────────────────────────────────────────────────
 function renderMaintenanceTab() {
-    const logs = filterLogs(state.maintenanceLogs);
+    const logs = filterLogs(state.maintenanceLogs).filter(l => l.type !== '飛行後点検');
     let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">整備記録（' + logs.length + '件）</h2>';
     html += '<button onclick="state.showMaintenanceForm=!state.showMaintenanceForm;render();" class="btn btn-primary">+ 新規記録</button></div>';
     if (state.showMaintenanceForm) {
