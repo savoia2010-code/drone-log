@@ -1936,19 +1936,6 @@ function render() {
 
     document.getElementById('app').innerHTML = html;
 
-    if (state.activeTab === 'flight' && !state.isRecording && !state.loading && state._defaultDroneId) {
-        const sel = document.getElementById('flight-drone-select');
-        const dbg = document.getElementById('_dbg');
-        if (sel) {
-            const before = sel.value;
-            sel.value = String(state._defaultDroneId);
-            const after = sel.value;
-            if (dbg) dbg.textContent += ' | before=[' + before + '] after=[' + after + '] options=' + sel.options.length;
-            onDroneSelect(String(state._defaultDroneId));
-        } else {
-            if (dbg) dbg.textContent += ' | sel=NOT FOUND';
-        }
-    }
     if (!TEST_MODE) {
         if (state.activeTab === 'flight' && !state.isRecording && !state.loading) {
             setTimeout(autoFetchWeather, 0);
@@ -2033,16 +2020,9 @@ function renderFlightTab() {
             ? [...state.flightLogs].sort((a, b) => String(b.date || '').slice(0, 10).localeCompare(String(a.date || '').slice(0, 10)))[0]
             : null;
         const lastDroneId  = lastLog ? String(lastLog.droneId)  : '';
-        state._defaultDroneId = lastDroneId; // ポストレンダーで参照するために保存
         const lastPilotId  = lastLog ? String(lastLog.pilotId)  : '';
         const lastPurpose  = lastLog ? (lastLog.purpose || '') : '';
         const lastFmModes  = lastLog && lastLog.flightMode ? lastLog.flightMode.split('、') : [];
-
-        const _dbgDrone = state.drones.find(d => String(d.id) === lastDroneId);
-        html += '<div id="_dbg" style="background:#fef3c7;border:1px solid #f59e0b;padding:6px 10px;margin-bottom:8px;font-size:11px;border-radius:4px;">'
-              + '🔍 DEBUG: 選択されるべき機体=[' + (_dbgDrone ? _dbgDrone.manufacturer + ' ' + _dbgDrone.model : 'NOT FOUND') + ']'
-              + ' | sel.value=PENDING'
-              + '</div>';
         html += '<h3 style="font-size:1.25rem;font-weight:700;margin-bottom:1.5rem;">新しい飛行を記録</h3>';
         html += '<div class="grid grid-2" style="max-width:800px;margin:0 auto 1.5rem;">';
         html += '<div class="form-group"><label class="label">機体</label><select id="flight-drone-select" class="select" onchange="onDroneSelect(this.value)"><option value="">選択してください</option>';
@@ -2448,6 +2428,14 @@ function renderMaintenanceEditModal() {
 
 // ─── 飛行記録タブ ─────────────────────────────────────────────────────────────
 function renderLogsTab() {
+    // 未選択の場合は最新フライトのある機体を自動選択
+    if (!state.selectedLogDroneId && state.flightLogs.length) {
+        const latest = [...state.flightLogs].sort((a, b) =>
+            String(b.date || '').slice(0, 10).localeCompare(String(a.date || '').slice(0, 10))
+        )[0];
+        if (latest) state.selectedLogDroneId = String(latest.droneId);
+    }
+
     let html = '<div class="flex-between mb-2"><h2 class="font-bold" style="font-size:1.25rem;">飛行記録</h2></div>';
 
     // 機体セレクター
