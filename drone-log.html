@@ -1427,7 +1427,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>飛行記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<script>window.addEventListener("load",function(){window.print();});window.addEventListener("afterprint",function(){window.close();});<\/script>'
+        + '<script>window.addEventListener("load",function(){window.print();window.close();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1569,7 +1569,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<script>window.addEventListener("load",function(){window.print();});window.addEventListener("afterprint",function(){window.close();});<\/script>'
+        + '<script>window.addEventListener("load",function(){window.print();window.close();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1699,7 +1699,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '') + '〜' + (state.pdfTo || '') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>日常点検記録（一覧）' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<script>window.addEventListener("load",function(){window.print();});window.addEventListener("afterprint",function(){window.close();});<\/script>'
+        + '<script>window.addEventListener("load",function(){window.print();window.close();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
@@ -1822,7 +1822,7 @@ body{font-family:'Hiragino Sans','Yu Gothic UI','Meiryo','MS Gothic',sans-serif;
         ? ' [' + (state.pdfFrom || '全期間') + ' 〜 ' + (state.pdfTo || '全期間') + ']' : '';
     const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>整備記録' + periodLabel + '</title><style>' + css + '</style></head><body>'
         + body
-        + '<script>window.addEventListener("load",function(){window.print();});window.addEventListener("afterprint",function(){window.close();});<\/script>'
+        + '<script>window.addEventListener("load",function(){window.print();window.close();});<\/script>'
         + '</body></html>';
     w.document.write(html);
     w.document.close();
